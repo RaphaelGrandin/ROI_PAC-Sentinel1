@@ -1,0 +1,220 @@
+
+####################################################
+###   Sentinel-1 pre-processor for ROI_PAC
+###   Raphael Grandin (IPGP) -- V2.4 -- Feb. 2016
+###   grandin@ipgp.fr
+####################################################
+### 
+### README FILE
+### 
+### Content :
+###  - installation guidelines
+###  - how it works
+###  - bibliography
+###  - license
+### 
+### 
+####################################################
+
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+INSTALLATION GUIDELINES
+
+1/ Install the following software / packages :
+- ROI_PAC Version 3.0.1
+- python 2.7 => will be called thru command "python2.7"
+- python (version 2.6?) => will be called thru command "python"
+- a few python libraries should be installed, including: mpmath, gdal 
+- optionally : snaphu
+- optionally : generic mapping tools
+
+2 / Modify a few ROI_PAC routines and re-compile ROI_PAC.
+The modified routines are located in directory "ROI_PAC_changes"
+The modifications are there to enable ROI_PAC to deal with wide
+Sentinel-1 images and to handle correctly ESA orbit state vectors.
+
+3 / Copy the content of "MY_SCR" directory to the user's own MY_SCR dir.
+This directory contains a few perl scripts that are occasionally called
+during the process.
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+HOW IT WORKS
+
+The principle of Sentinel-1 InSAR processing is described in Grandin (2015).
+
+A prerequisite is that the user downloads Sentinel-1 data in SLC format. 
+
+Then, the user fills a parameter file that tells the package what data
+should be used, and where to find the data. The parameter file should look like
+this : 
+
+*****************************************   BEGIN   *******************************************
+PATHDIR           /home/rgrandin/S1-ROI_PAC_V2.4
+WORKINGDIR        /media/Quadra_4/Nepal_SD_test/Frame3/20150409_20150503
+DIR_ARCHIVE       /media/Quadra_3/Nepal2015/Sentinel/data
+DEM               /media/Quadra_3/Nepal2015/DEM/srtmV4_nepal_corrpatch_shift_destrip_crop_Nepal2015_Frame3_resamp4x.dem
+DEM_low           /media/Quadra_3/Nepal2015/DEM/srtmV4_nepal_corrpatch_shift_destrip_crop_Nepal2015_Frame3_resamp4x_4rlks.dem
+LABEL_ante        20150409
+LABEL_post        20150503
+DIR_IMG_ante      S1A_IW_SLC__1SSV_20150409T122127_20150409T122154_005407_006E01_6F00.SAFE
+DIR_IMG_ante      S1A_IW_SLC__1SSV_20150409T122152_20150409T122224_005407_006E01_0098.SAFE
+DIR_IMG_post      S1A_IW_SLC__1SSV_20150503T122118_20150503T122145_005757_007649_5EE7.SAFE
+DIR_IMG_post      S1A_IW_SLC__1SSV_20150503T122143_20150503T122211_005757_007649_F885.SAFE
+DIR_IMG_post      S1A_IW_SLC__1SSV_20150503T122208_20150503T122235_005757_007649_A437.SAFE
+LOOKS_RANGE       12
+LOOKS_AZIMUTH     4
+*****************************************    END     *******************************************
+
+Explanation :
+
+************    MANDATORY    *************
+PATHDIR = path to the directory where the Sentinel-1 ROI_PAC package is located
+WORKINGDIR = path to the working directory, i.e. where the processing will take place
+DIR_ARCHIVE = path to the directory containing Sentinel-1 SAFE directories.
+DEM = path and name of a dense DEM (resolution should be ~ 20 m or better – oversampled SRTM is OK)
+DEM_low = path and name of a coarser DEM (it is OK to multilook the above DEM by a factor 4)
+LABEL_ante = name of master date, in YYYYMMDD format
+LABEL_post = name of slave date, in YYYYMMDD format
+DIR_IMG_ante = name of Sentinel-1 data directory for the master image
+DIR_IMG_ante = another directory to append and create a long strip
+DIR_IMG_ante = yet another one... they should be provided in chronological order.
+DIR_IMG_post = same, but for the slave image
+************    OPTIONAL    *************
+LOOKS_RANGE = (integer) number of looks in range (12 is OK)
+LOOKS_AZIMUTH = (integer) number of looks in azimuth (4 is OK)
+SKIP_BEG_ante = (integer) skip this number of bursts at the top of first master image
+SKIP_END_ante = (integer) skip this number of bursts at the bottom of last master image
+SKIP_BEG_post = (integer) skip this number of bursts at the top of first slave image
+SKIP_END_post = (integer) skip this number of bursts at the bottom of last slave image
+
+ 
+Finally, the user copies the file named "S1-ROI_PAC_00_batch.sh" (located in directory "scripts")
+into his working directory. This script is run from command line, and takes the parameter
+file as the single (required) argument. For example :
+
+./S1-ROI_PAC_00_batch.sh topsar_param.in 
+
+This script runs the successive processing steps.
+Each step corresponds to a script, numbered from 01 to 09 in directory "scripts".
+All the steps are run successively for the three sub-swaths.
+By default, the process is run using polarization VV, but this can be changed
+by editing "S1-ROI_PAC_00_batch.sh".
+
+The user is advised to run the steps manually one after the other in the first place
+in order to become familiar with the procesing. The scripts take the parameter file
+as first argument, followed by sub-swath name and polarization. For instance :
+
+./S1-ROI_PAC_01_stitch.csh topsar_param.in iw2 vv
+./S1-ROI_PAC_02_baseline.csh topsar_param.in iw2 vv
+./S1-ROI_PAC_03_correl.csh topsar_param.in iw2 vv
+...... etc ......
+
+The successive steps are the following :
+
+STEP 1 : S1-ROI_PAC_01_stitch.csh
+01 / From a list of provided SAFE directories, order them in chronological order
+02 / Decode the metadata from .xml files in SAFE directories. If necessary,
+the zipped SAFE directories are unzipped.
+03 / Compare length of master / slave images and only keep bursts
+in the intersection of the two acquisitions
+04 / Download orbits (restituted and precise) from ESA QC web site
+(S1-ROI_PAC_01b_download_orbits.sh)
+05 / Correct azimuth phase drift burst-by-burst to bring azimuth spectrum to
+baseband, for the master and slave SLCs
+06 / Stitch the bursts to produce continuous images
+07 / Save two alternative SLCs for the master image containing forward-looking
+and backward-looking phases in burst overlaps.
+
+STEP 2 : S1-ROI_PAC_02_baseline.csh
+08 / Start ROI_PAC processing to create file tree structure
+09 / Compute baselines
+
+STEP 3 : S1-ROI_PAC_03_correl.csh
+10 / Compute dense pixel offsets between master and slave images
+
+STEP 4 : S1-ROI_PAC_04_sync.csh
+11 / Re-run azimuth phase drift correction for slave image using time offset
+deduded from pixel offsets.
+12 / Also save two alternative SLCs for the slave image containing forward-looking
+and backward-looking phases in burst overlaps.
+
+STEP 5 : S1-ROI_PAC_05_interf.csh
+13 / Run ROI_PAC from SLCs to interferogram corrected from simulation
+
+STEP 5b (optional) : S1-ROI_PAC_05_interf.csh
+13b / Re-run interferogram calculation only
+
+STEP 6i : S1-ROI_PAC_06_sd.csh
+14 / Compute double-difference interferogram for spectral diversity
+
+STEP 7 : S1-ROI_PAC_07_sd_finish.csh
+15 / Re-run azimuth phase drift correction for slave image using time offset
+deduded from pixel offsets and refinement from spectral diversity
+16 / Re-calculate interferogram
+
+STEP 7b (optional) : S1-ROI_PAC_07b_sd_refine.csh
+16b / Update across-track burst overlap interferogram
+to account for correction deduced from spectral diversity.
+
+STEP 8 : S1-ROI_PAC_08_unwrap.csh
+17 / Filter and unwrap interferogram
+
+STEP 9 : S1-ROI_PAC_09_done.csh
+18 / Geocode unwrapped interferogram using coarse DEM
+
+STEP 10 (unstable) : S1-ROI_PAC_10_geocode_beta.csh
+19 / Stich the geocoded sub-swaths together to produce seamless interogram.
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+REFERENCES
+
+Grandin, R., (2015).
+"Interferometric processing of SLC Sentinel-1 TOPS data."
+In Proceedings of the European Space Agency, SP-371.
+FRINGE 2015, 23-27 March 2015, Frascati (Rome), Italy.
+
+Grandin, R., E. Klein, M. Métois, and C. Vigny (2016).
+"3D displacement field of the 2015 Mw8.3 Illapel earthquake (Chile)"
+"from across- and along-track Sentinel-1 TOPS interferometry"
+Geophys. Res. Lett., 43, doi:10.1002/2016GL067954.
+
+
+PDFs can be found in directory "bibliography"
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+LICENSE
+
+	
+* Copyright (C) 2016 R.GRANDIN
+
+* grandin@ipgp.fr
+
+* "Sentinel-1 pre-processor for ROI_PAC".
+
+*    "Sentinel-1 pre-processor for ROI_PAC" is free software: you can redistribute
+     it and/or modify it under the terms of the GNU General Public License
+	 as published by the Free Software Foundation, either version 3 of
+	 the License, or (at your option) any later version.
+
+*    "Sentinel-1 pre-processor for ROI_PAC" is distributed in the hope that it
+     will be useful, but WITHOUT ANY WARRANTY; without even the implied
+	 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+	 See the GNU General Public License for more details.
+
+*     You should have received a copy of the GNU General Public License
+     along with "Sentinel-1 pre-processor for ROI_PAC".
+	 If not, see <http://www.gnu.org/licenses/>.
+
+
