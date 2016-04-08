@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Roi pac-sentinel1 by RaphaelGrandin</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+    <meta name="viewport" content="width=device-width">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Roi pac-sentinel1</h1>
+        <p>InSAR processing of Sentinel-1 using ROI_PAC</p>
+
+        <p class="view"><a href="https://github.com/RaphaelGrandin/ROI_PAC-Sentinel1">View the Project on GitHub <small>RaphaelGrandin/ROI_PAC-Sentinel1</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/RaphaelGrandin/ROI_PAC-Sentinel1/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/RaphaelGrandin/ROI_PAC-Sentinel1/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/RaphaelGrandin/ROI_PAC-Sentinel1">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h3>
+<a id="what-this-code-does" class="anchor" href="#what-this-code-does" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>What this code does.</h3>
+
+<p>This code makes ROI_PAC capable of handling Sentinel-1 TOPS data for interferometry.</p>
+
+<h3>
+<a id="how-it-works" class="anchor" href="#how-it-works" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How it works.</h3>
+
+<p>The method is described in the following paper :
+<em>Grandin, R., 2015. Interferometric processing of SLC Sentinel-1 TOPS data. In Proceedings of the European Space Agency, SP-371. FRINGE 2015, 23-27 March 2015, Frascati (Rome), Italy.</em>
+The paper can be found <a href="http://www.ipgp.fr/%7Egrandin/Raphael_Grandin_personal_web_page/Publications_files/Grandin_Fringe2015.pdf">here</a>.</p>
+
+<h3>
+<a id="how-to-install-it" class="anchor" href="#how-to-install-it" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How to install it.</h3>
+
+<p>You will need to install a few python packages (mpmath, gdal, ...), to re-compile a few ROI_PAC routines and to add a few Perl scripts to your $MY_SCR folder. Everything is explained in the README file.</p>
+
+<h3>
+<a id="how-to-run-it" class="anchor" href="#how-to-run-it" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How to run it.</h3>
+
+<p>You will need to write a parameter file that tells the processor where your Sentinel-1 data are, where your DEM is. You can feed as many Sentinel-1 images as you want, as long as they are contiguous along the track and acquired on the same pass. A fine DEM is needed (30 m posting or better).</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/RaphaelGrandin">RaphaelGrandin</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
