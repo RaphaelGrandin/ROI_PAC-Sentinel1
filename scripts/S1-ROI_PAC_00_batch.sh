@@ -2,7 +2,7 @@
 
 ####################################################
 ###   Sentinel-1 pre-processor for ROI_PAC
-###   Raphael Grandin (IPGP) -- V2.4 -- Feb. 2016
+###   Raphael Grandin (IPGP)  -- April 2016
 ###   grandin@ipgp.fr
 ####################################################
 ### STEP 0
