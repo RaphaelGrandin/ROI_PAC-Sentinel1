@@ -1,0 +1,11 @@
+PATHDIR		  /home/rgrandin/S1-ROI_PAC_V2.4
+WORKINGDIR        /media/Quadra_1/Sentinel_Etna/interf/20141008_20141020
+DIR_ARCHIVE       /media/Quadra_1/Sentinel_Etna/data
+DEM               /media/Quadra_2/RTOPS/RTOPS_Interf/etna/DEM/etna_srtm_90m_resamp4x.dem
+DEM_low           /media/Quadra_2/RTOPS/RTOPS_Interf/etna/DEM/etna_srtm_90m.dem
+LABEL_ante	  20141008
+LABEL_post	  20141020
+DIR_IMG_ante      S1A_IW_SLC__1SDV_20141008T165548_20141008T165616_002741_003133_4DB5.SAFE 
+DIR_IMG_post      S1A_IW_SLC__1SDV_20141020T165548_20141020T165616_002916_0034E5_B75E.SAFE
+LOOKS_RANGE		  4
+LOOKS_AZIMUTH	  12

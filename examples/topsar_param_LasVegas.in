@@ -1,0 +1,15 @@
+PATHDIR		  /home/rgrandin/S1-ROI_PAC_V2.4
+WORKINGDIR        /media/Quadra_1/Sentinel_LasVegas/interf/20141029_20141122
+DIR_ARCHIVE       /media/Quadra_1/Sentinel_LasVegas/data
+DEM               /media/Quadra_1/Sentinel_LasVegas/DEM/lasvegas_srtm_30m_resamp2x.dem
+DEM_low           /media/Quadra_1/Sentinel_LasVegas/DEM/lasvegas_srtm_30m_2rlks.dem
+LABEL_ante        20141029
+LABEL_post        20141122
+DIR_IMG_ante      S1A_IW_SLC__1SSV_20141029T014157_20141029T014227_003038_003784_A86D.SAFE
+DIR_IMG_post      S1A_IW_SLC__1SSV_20141122T014151_20141122T014221_003388_003F1A_FF6D.SAFE
+SKIP_BEG_ante     0
+SKIP_END_ante     2
+SKIP_BEG_post     2
+SKIP_END_post     0
+LOOKS_RANGE       15
+LOOKS_AZIMUTH     5

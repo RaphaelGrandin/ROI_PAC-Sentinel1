@@ -1,0 +1,13 @@
+PATHDIR		  /home/rgrandin/S1-ROI_PAC_V2.4
+WORKINGDIR        /media/Quadra_1/Mojave/interf/20150121_20150214
+DIR_ARCHIVE       /media/Quadra_1/Mojave/data
+DEM               /media/Quadra_1/Mojave/DEM/mojave_srtm_30m_resamp2x.dem
+DEM_low           /media/Quadra_1/Mojave/DEM/mojave_srtm_30m_4rlks.dem
+LABEL_ante        20150121
+LABEL_post        20150214
+DIR_IMG_ante      S1A_IW_SLC__1SSV_20150121T134322_20150121T134349_004270_005317_6A6E.SAFE
+DIR_IMG_post      S1A_IW_SLC__1SSV_20150214T134322_20150214T134349_004620_005B16_3245.SAFE
+LOOKS_RANGE       12
+LOOKS_AZIMUTH     4
+
+
