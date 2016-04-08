@@ -25,11 +25,10 @@ INSTALLATION GUIDELINES
 
 1/ Install the following software / packages :
 - ROI_PAC Version 3.0.1
-- python 2.7 => will be called thru command "python2.7"
-- python (version 2.6?) => will be called thru command "python"
+- python 2.6 => will be called thru command "python"
 - a few python libraries should be installed, including: mpmath, gdal 
-- optionally : snaphu
-- optionally : generic mapping tools
+- optionally : snaphu (http://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu/)
+- optionally : generic mapping tools (http://gmt.soest.hawaii.edu/)
 
 2 / Modify a few ROI_PAC routines and re-compile ROI_PAC.
 The modified routines are located in directory "ROI_PAC_changes"
