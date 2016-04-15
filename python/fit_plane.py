@@ -184,17 +184,19 @@ seuilAmp = facteurSeuilAmp * myCpxArrayOvlAmpMedian
 # only consider pixels with an amplitude exceeding a certain threshold
 # and a phase different from exactly 0.0
 # seuilAmp=numpy.percentile(myCpxArrayOvlAmp, 90) # alternatively, remove 90% of pixels with smallest amplitude
-myCpxArrayOvlAmpSeuil=[i for i in myCpxArrayOvlAmp if i >= seuilAmp]
-#myCpxArrayOvlPhsSeuil=[ j for (i,j) in zip(myCpxArrayOvlAmp,myCpxArrayOvlPhs) if i >= seuilAmp ]
+myCpxArrayOvlAmpSeuil=[ i for (i,j) in zip(myCpxArrayOvlAmp,myCpxArrayOvlPhs) if i >= seuilAmp and j != numpy.float(0.0)]
 myCpxArrayOvlPhsSeuil=[ j for (i,j) in zip(myCpxArrayOvlAmp,myCpxArrayOvlPhs) if i >= seuilAmp and j != numpy.float(0.0) ]
-coordMatSeuil=[ j for (i,j) in zip(myCpxArrayOvlAmp,coordMat.T[0]) if i >= seuilAmp ]
-coordMatSeuil=numpy.vstack((coordMatSeuil,[ j for (i,j) in zip(myCpxArrayOvlAmp,coordMat.T[1]) if i >= seuilAmp ]))
+coordMatSeuil=[ k for (i,j,k) in zip(myCpxArrayOvlAmp,myCpxArrayOvlPhs,coordMat.T[0]) if i >= seuilAmp and j != numpy.float(0.0) ]
+coordMatSeuil=numpy.vstack((coordMatSeuil,[ k for (i,j,k) in zip(myCpxArrayOvlAmp,myCpxArrayOvlPhs,coordMat.T[1]) if i >= seuilAmp and j != numpy.float(0.0) ]))
 coordMatSeuil=coordMatSeuil.T
 
 # # # # # # # # # # # # # #
 # solve the linear problem
 A=numpy.hstack((coordMatSeuil*factorSlopeOvl,numpy.ones((len(coordMatSeuil),1))))
 b=myCpxArrayOvlPhsSeuil
+print "A", A.shape
+b=numpy.array(b)
+print "b", b.shape
 res_lstsqSeuil = numpy.linalg.lstsq(A,b)[0] # computing the numpy solution
 
 # # # # # # # # # # # # # #
