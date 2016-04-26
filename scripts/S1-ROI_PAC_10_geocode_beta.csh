@@ -200,10 +200,11 @@ while ( $count_strip <= $num_strips )
 	
 	# set grid dimensions automatically
 	set GRIDMOS=`grep "Latitude and longitude" INTERFERO/${pairdates}_iw*//SIM/IntSim.out | minmax | awk '{print $(NF)"/"$(NF-1)}' | awk '{gsub("<",""); gsub(">",""); print "-R"$0}'`
-	echo $GRIDMOS
 	# or use DEM
 	set GRIDMOS=`grdinfo -I- $MYDEM`	
-	#set GRIDMOS="129.9778/132.98/30.6197/34.6939"
+	# or use hardcoded grid dimensions 
+	#set GRIDMOS="-R129.9778/132.98/30.6197/34.6939"
+	#set GRIDMOS="-R130.25/132/32/33.75"
 	echo $GRIDMOS
 	
 	# prepare a few directories
@@ -249,8 +250,9 @@ while ( $count_strip <= $num_strips )
         else if ( $GEO_FORMAT == "xint" ) then
         ### XINT ###
             set MY_PALETTE=${PALDIR}/palpi.cpt
-            set imoutmos=${filein}"_xint"
-            set imout=${grdout}_xint
+	    set filein="geo_"${pairdates}_xint
+            set imoutmos=${filein}
+            set imout=${grdout}i_xint
 	else if ( $GEO_FORMAT == "unw" ) then
 	###?| UNW ###
 	    set MY_PALETTE=${PALDIR}/palcmy_unw.cpt 
@@ -305,7 +307,7 @@ while ( $count_strip <= $num_strips )
 	    gmtset BASEMAP_TYPE PLAIN
 	    gmtset PLOT_DEGREE_FORMAT D
 	    gmtset D_FORMAT=%.12g
-	    set PROJ=M10
+	    set PROJ=M8
 	
 	    if ( $GEO_FORMAT == "int" || $GEO_FORMAT == "xint") then
 	### INT ###
@@ -348,10 +350,6 @@ while ( $count_strip <= $num_strips )
 				grdgradient ${filein}.dem.grd -A200 -Ne0.3 -G${filein}.dem.grad.grd
 		    endif
 	
-		    gmtset BASEMAP_TYPE PLAIN
-		    gmtset PLOT_DEGREE_FORMAT D
-		    set PROJ=M12
-	    
 		    psbasemap $GRIDINFO -J$PROJ -B0.5 -Xc -Yc -P -K > ${imout}.ps 
 		    #pscoast -Ir/0.25p,blue -Na/0.25p,- -R -J -Df -W4 -K -O >> ${imout}.ps
 		    grdimage ${filein}.dem.grad.grd -R -J -Sn -C${PALDIR}/palnb_1.cpt -O -K >> ${imout}.ps	
@@ -359,7 +357,7 @@ while ( $count_strip <= $num_strips )
                     grdimage ${imout}.grd  -R -J -Sn -Q -C$MY_PALETTE -O -K >> ${imout}.ps
 		    pscoast -Ir/0.25p,blue -Na/0.25p,- -S230 -R -J -Df -W4 -K -O >> ${imout}.ps
 		    psscale -D0c/-12c/5c/0.5ch -C$MY_PALETTE -B3.14:LOS:/:rad: -O >> ${imout}.ps
-		    mogrify -format png -density 200 -rotate 90 ${imout}.ps
+		    mogrify -format png -density 200 ${imout}.ps
 		#eog ${imout}.png
 	
 		    grdimage ${imout}.grd $GRIDMOS -J$PROJMOS -Sn -Q -C$MY_PALETTE -O -K >> $MOSDIR/${imoutmos}.ps
@@ -439,16 +437,19 @@ while ( $count_strip <= $num_strips )
 	
 		    awk '{if(substr($1,1,1)!="#" && NF==8) printf("%.1f\t%d\t%d\t%d\t%.1f\t%d\t%d\t%d\n",$1+('$shift_phase'),$2,$3,$4,$5+('$shift_phase'),$6,$7,$8); else print $0}' $MY_PALETTE > my_palette.cpt
 	
+		    set PALINFO=`grdinfo -T0.1 ${imout}_shift.grd`
+		    makecpt -Ccmy $PALINFO > pal_unw_tempo.cpt
+
 		    psbasemap $GRIDINFO -J$PROJ -B0.5 -Xc -Yc -P -K > ${imout}.ps
 		    #pscoast -Ir/0.25p,blue -Na/0.25p,- -R -J -Df -W4 -K -O >> ${imout}.ps
 		    grdimage ${filein}.dem.grad.grd -R -J -Sn -C${PALDIR}/palnb_1.cpt -O -K >> ${imout}.ps
-		    #grdimage ${imout}_shift.grd -I${imout}_normamp.grd -R -J -Sn -Q -Cmy_palette.cpt -O -K >> ${imout}.ps
-		    grdimage ${imout}_shift.grd -I${imout}_normamp.grd -R -J -Sn -Q -C$MY_PALETTE -O -K >> ${imout}.ps
+		    grdimage ${imout}_shift.grd -I${imout}_normamp.grd -R -J -Sn -Q -Cpal_unw_tempo.cpt -O -K >> ${imout}.ps
+		    #grdimage ${imout}_shift.grd -I${imout}_normamp.grd -R -J -Sn -Q -C$MY_PALETTE -O -K >> ${imout}.ps
 		    #grdcontour ${imout}_shift.grd -C6.28 -Q100 -R -J -O -K -V >> ${imout}.ps
                     pscoast -Ir/0.25p,blue -Na/0.25p,- -S230 -R -J -Df -W4 -K -O >> ${imout}.ps
-		    psscale -D0c/-12c/5c/0.5ch -I -Cmy_palette.cpt -B25:LOS:/:rad: -O >> ${imout}.ps
+		    psscale -D0c/-12c/5c/0.5ch -I -Cpal_unw_tempo.cpt -B10:LOS:/:rad: -O >> ${imout}.ps
                     #psscale -D0c/-12c/5c/0.5ch -I -C$MY_PALETTE -B0.5:COR:/:: -O >> ${imout}.ps
-		    mogrify -format png -density 200 -rotate 90 ${imout}.ps
+		    mogrify -format png -density 200 ${imout}.ps
 #eog ${imout}.png
 	
 	    endif
@@ -467,7 +468,9 @@ mos:
 	#	mv -f tmp.grd ${imoutmos}.grd
 		grdimage ${imoutmos}.grd $GRIDMOS -J$PROJMOS -I${imoutmos}.dem.grad.grd -Sn -Q -C$MY_PALETTE -O -K >> $MOSDIR/${imoutmos}.ps
 		grdcontour ${imoutmos}.grd -C6.28 -R -J -O -K >> $MOSDIR/${imoutmos}.ps
+                pscoast -Ir/0.25p,blue  -R -J -Df -W0.75 -K -O >> ${imoutmos}.ps
 		psscale -D7c/3c/3c/0.5c -I -C$MY_PALETTE -B25:LOS:/:rad: -O >> ${imoutmos}.ps
+		rm -fr tmp.grd
 	else
 		pscoast -Ir/0.25p,blue  $GRIDMOS -J$PROJMOS -Df -W0.75 -K -O >> ${imoutmos}.ps
                 psscale -D7c/3c/3c/0.5c -I -C$MY_PALETTE -B3.14:LOS:/:rad: -O >> ${imoutmos}.ps

@@ -199,8 +199,11 @@ while ( $count_strip <= $num_strips )
          	rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int
          	$INT_BIN/diffnsim diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
 #toto:
+		# multilook
          	rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int
          	look.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int $LOOKS_RANGE $LOOKS_AZIMUTH
+		rm -fr ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.amp
+		look.pl ${LABEL_ante}-${LABEL_post}.amp $LOOKS_RANGE $LOOKS_AZIMUTH
 
                 # re-calculate .cor
                 rm -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor
