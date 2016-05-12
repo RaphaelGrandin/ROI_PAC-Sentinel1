@@ -65,6 +65,10 @@ while ( $count <= $num_lines_param_file )
 		set LOOKS_RANGE=$fieldcontent
 	else if ( $fieldname == "LOOKS_AZIMUTH" ) then
 		set LOOKS_AZIMUTH=$fieldcontent
+        else if ( $fieldname == "SPECTRAL_DIV" ) then
+                set SPECTRAL_DIV=($fieldcontent)
+        else if ( $fieldname == "FULL_RES" ) then
+                set FULL_RES=$fieldcontent
 	else
 		#echo "Unknown field : "$linecurrent
 	endif
@@ -130,6 +134,33 @@ if ( ! $?SKIP_END_post ) then
         set SKIP_END_post = 0
 endif
 
+### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
+if ( ! $?SPECTRAL_DIV ) then
+        set SPECTRAL_DIV="yes"
+else if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
+        echo "Setting SPECTRAL_DIV to \"yes\" (default)."
+        set SPECTRAL_DIV="yes"
+else
+        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+endif
+
+### Check if user wants to process at full resolution (default : FULL_RES="yes")
+if ( ! $?FULL_RES ) then
+        set FULL_RES="yes"
+else if ( $FULL_RES != "no" && $FULL_RES != "No" && $FULL_RES != "NO" && $FULL_RES != "0" ) then
+        echo "Setting FULL_RES to \"yes\" (default)."
+        set FULL_RES="yes"
+else
+        echo "Full resolution processing will be performed (FULL_RES=$FULL_RES)."
+endif
+
+### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
+### Default behaviour : set SPECTRAL_DIV back to "no"
+if ( $SPECTRAL_DIV == "yes" && $SPECTRAL_DIV != "yes" ) then
+        echo "SPECTRAL_DIV=yes and FULL_RES=no are incompatible."
+        set SPECTRAL_DIV="no"
+        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+endif
 
 set num_files_ante=$#DIR_IMG_ante
 set num_files_post=$#DIR_IMG_post
@@ -162,7 +193,7 @@ echo "Strip list : " $strip_list
 set polar_list=$argv[3]
 echo "Polar list : " $polar_list
 
-
+if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
 
 # # # # # # # # # # # # # # # # # 
 # # Spectral diversity Step 1 # #
@@ -278,6 +309,9 @@ while ( $count_strip <= $num_strips )
 	@ count_strip ++
 end
 
+else
+	echo "Skipping spectral diversity step!"
+endif
 exit
 
 # * Copyright (C) 2016 R.GRANDIN

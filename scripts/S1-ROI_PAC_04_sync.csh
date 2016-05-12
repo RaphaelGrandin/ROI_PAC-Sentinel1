@@ -71,6 +71,10 @@ while ( $count <= $num_lines_param_file )
 		set SKIP_END_ante=($fieldcontent)
 	else if ( $fieldname == "SKIP_END_post" ) then
 		set SKIP_END_post=($fieldcontent)
+        else if ( $fieldname == "SPECTRAL_DIV" ) then
+                set SPECTRAL_DIV=($fieldcontent)
+        else if ( $fieldname == "FULL_RES" ) then
+                set FULL_RES=$fieldcontent
 	else
 		#echo "Unknown field : "$linecurrent
 	endif
@@ -163,6 +167,33 @@ else if ( $#SKIP_END_post != 1 ) then
 	set SKIP_END_post = $SKIP_END_post[$subswath]
 endif
 
+### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
+if ( ! $?SPECTRAL_DIV ) then
+        set SPECTRAL_DIV="yes" # default
+else if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
+        echo "Setting SPECTRAL_DIV to \"yes\" (default)."
+        set SPECTRAL_DIV="yes" #default
+else
+        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+endif
+
+### Check if user wants to process at full resolution (default : FULL_RES="yes")
+if ( ! $?FULL_RES ) then
+        set FULL_RES="yes"
+else if ( $FULL_RES != "no" && $FULL_RES != "No" && $FULL_RES != "NO" && $FULL_RES != "0" ) then
+        echo "Setting FULL_RES to \"yes\" (default)."
+        set FULL_RES="yes"
+else
+        echo "Full resolution processing will be performed (FULL_RES=$FULL_RES)."
+endif
+
+### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
+### Default behaviour : set SPECTRAL_DIV back to "no"
+if ( $SPECTRAL_DIV == "yes" && $SPECTRAL_DIV != "yes" ) then
+        echo "SPECTRAL_DIV=yes and FULL_RES=no are incompatible."
+        set SPECTRAL_DIV="no"
+        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+endif
 
 set num_files_ante=$#DIR_IMG_ante
 set num_files_post=$#DIR_IMG_post
@@ -334,6 +365,8 @@ paste ${LABEL_ante}_${strip}_${polar}_LagOutDop.txt ${LABEL_ante}_${strip}_${pol
 	    @ scene += 1
 	end
 	
+        if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
+
     # # extract forward-looking SLC and backward-looking SLC for later Spectral Diversity step
 
 	# forward looking geometry
@@ -436,7 +469,7 @@ paste ${LABEL_ante}_${strip}_${polar}_LagOutDop.txt ${LABEL_ante}_${strip}_${pol
 	end
 
         cp -f ${LABEL_post}_${strip}_${polar}.slc.rsc ${LABEL_post}_${strip}_${polar}_bw.slc.rsc
-
+	endif
 
 	@ count_strip ++
 end
