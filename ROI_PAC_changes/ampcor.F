@@ -131,7 +131,7 @@ c     PARAMETER STATEMENTS:
       parameter(i_idx=2048) ! was 512
       parameter(i_idy=2048) ! was 512
 c      parameter(i_maxsamp=25000)
-      parameter(i_maxsamp=100000)
+      parameter(i_maxsamp=30000)
       parameter(i_maxlines=2048)
       parameter(i_ovs=2)
       parameter(i_srchpp=4)
