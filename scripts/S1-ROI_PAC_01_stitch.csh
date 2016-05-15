@@ -190,7 +190,7 @@ endif
 
 ### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
 ### Default behaviour : set SPECTRAL_DIV back to "no"
-if ( $SPECTRAL_DIV == "yes" && $SPECTRAL_DIV != "yes" ) then
+if ( $SPECTRAL_DIV == "yes" && $FULL_RES != "yes" ) then
         echo "SPECTRAL_DIV=yes and FULL_RES=no are incompatible."
         set SPECTRAL_DIV="no"
         echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
