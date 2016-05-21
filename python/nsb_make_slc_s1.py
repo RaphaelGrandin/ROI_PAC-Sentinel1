@@ -26,16 +26,25 @@ import datetime, getopt, glob, os, sys, xml.etree.ElementTree
 import numpy as np
 
 #import gdal
-from osgeo import gdal
+#from osgeo import gdal
+#from nsbas import gdal
 #drv = gdal.GetDriverByName("roi_pac")
-drv = gdal.GetDriverByName("ENVI")
+#drv = gdal.GetDriverByName("ENVI")
 
+import imp
 
 C = 299792458.0
 ae = 6378137
 flat = 1.0 / 298.257223563
 eccentricity2 = flat * (2-flat)
 
+def module_exists(module_name):
+    try:
+        __import__(module_name)
+    except ImportError:
+        return False
+    else:
+        return True
 
 def open_annotationxml(safepath, swath, polarization):
     globpat = os.path.join(safepath,
@@ -335,6 +344,40 @@ def UTC2YYMMDD(timeUTC, timeRefYYMMDD):
 	myYYMMDD = datetime.datetime.strptime(myDateString+"T"+myTimeString,"%Y-%m-%dT%H:%M:%S.%f")
 	return myYYMMDD
 
+
+# Check if module osgeo exists
+try:
+    imp.find_module('osgeo')
+    found_osgeo = True
+except ImportError:
+    found_osgeo = False
+
+# Check if module nsbas exists
+try:
+    imp.find_module('nsbas')
+    found_nsbas = True
+except ImportError:
+    found_nsbas = False
+
+# Check if gdal is available and import it from osgeo or nsbas
+if found_osgeo: # by default, use osgeo
+    from osgeo import gdal
+    print 'Using osgeo version of gdal'
+else:
+    # Check if module nsbas exists
+    try:
+        imp.find_module('nsbas')
+        found_nsbas = True
+    except ImportError:
+        found_nsbas = False
+    if found_nsbas: # if osgeo is not found, use nsbas instead
+        from nsbas import gdal
+        print 'Using nsbas version of gdal'
+    else:
+        raise Exception("gdal not found, neither in osgeo nor in nsbas!")
+
+# ENVI format
+drv = gdal.GetDriverByName("ENVI")
 
 # 0. Read arguments passed to python script
 #swath = 1
