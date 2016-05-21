@@ -60,6 +60,8 @@ while ( $count <= $num_lines_param_file )
 		set LOOKS_RANGE=$fieldcontent
 	else if ( $fieldname == "LOOKS_AZIMUTH" ) then
 		set LOOKS_AZIMUTH=$fieldcontent
+        else if ( $fieldname == "UNWRAP_METHOD" ) then
+                set UNWRAP_METHOD=$fieldcontent
 	else
 		#echo "Unknown field : "$linecurrent
 	endif
@@ -125,6 +127,15 @@ if ( ! $?SKIP_END_post ) then
         set SKIP_END_post = 0
 endif
 
+### Check unwrapping method (default : UNWRAP_METHOD="cuttree")
+if ( ! $?UNWRAP_METHOD ) then
+        set UNWRAP_METHOD="cuttree"
+else if ( $UNWRAP_METHOD != "SNAPHU" && $UNWRAP_METHOD != "Snaphu" && $UNWRAP_METHOD != "snaphu" ) then
+        echo "Setting UNWRAP_METHOD to \"cuttree\" (default)."
+        set UNWRAP_METHOD="cuttree"
+else
+        echo "Unwrapping method : snaphu (UNWRAP_METHOD=$UNWRAP_METHOD)."
+endif
 
 set num_files_ante=$#DIR_IMG_ante
 set num_files_post=$#DIR_IMG_post
@@ -203,13 +214,15 @@ while ( $count_strip <= $num_strips )
 	# # Do the unwrapping
     process_2pass.pl int.proc begin_filt unwrapped >>& log_process2pass_${LABEL_ante}-${LABEL_post}_${strip}_${polar}.txt
 	
-	# # Unwrap with SNAPHU
-	cd INT
-	$MY_SCR/snaphuG_mcf.pl defo filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_snaphu.unw ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor
-	set UNW_FILE=(`ls -tr filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_c??.unw`)
-	set UNW_FILE=$UNW_FILE[$#UNW_FILE]
-	mv -f $UNW_FILE ${UNW_FILE}_OLD
-	ln -sf filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_snaphu.unw $UNW_FILE
+	if ( $UNWRAP_METHOD == "SNAPHU" || $UNWRAP_METHOD == "Snaphu" || $UNWRAP_METHOD == "snaphu" ) then
+		# # Unwrap with SNAPHU
+		cd INT
+		$MY_SCR/snaphuG_mcf.pl defo filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_snaphu.unw ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor
+		set UNW_FILE=(`ls -tr filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_c??.unw`)
+		set UNW_FILE=$UNW_FILE[$#UNW_FILE]
+		mv -f $UNW_FILE ${UNW_FILE}_OLD
+		ln -sf filt_${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks_snaphu.unw $UNW_FILE
+	endif
 	
 
 	# # For some reason, the amplitude of the unwrapped file gets messed up in this process
