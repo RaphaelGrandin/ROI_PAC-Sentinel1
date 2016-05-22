@@ -72,6 +72,8 @@ while ( $count <= $num_lines_param_file )
 		set SKIP_END_ante=($fieldcontent)
 	else if ( $fieldname == "SKIP_END_post" ) then
 		set SKIP_END_post=($fieldcontent)
+        else if ( $fieldname == "DOWNLOAD_ORB" ) then
+                set DOWNLOAD_ORB=($fieldcontent)
         else if ( $fieldname == "SPECTRAL_DIV" ) then
                 set SPECTRAL_DIV=($fieldcontent)
         else if ( $fieldname == "FULL_RES" ) then
@@ -166,6 +168,16 @@ if ( ! $?SKIP_END_post ) then
 	set SKIP_END_post = -1
 else if ( $#SKIP_END_post != 1 ) then
 	set SKIP_END_post = $SKIP_END_post[$subswath]
+endif
+
+### Check if user wants to download orbits (default : DOWNLOAD_ORB="yes")
+if ( ! $?DOWNLOAD_ORB ) then
+        set DOWNLOAD_ORB="yes"
+else if ( $DOWNLOAD_ORB != "no" && $DOWNLOAD_ORB != "No" && $DOWNLOAD_ORB != "NO" && $DOWNLOAD_ORB != "0" ) then
+        echo "Setting DOWNLOAD_ORB to \"yes\" (default)."
+        set DOWNLOAD_ORB="yes"
+else
+        echo "Download of orbit files will be skipped (DOWNLOAD_ORB=$DOWNLOAD_ORB)."
 endif
 
 ### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
@@ -263,7 +275,7 @@ endif
 @ count_strip = 1
 while ( $count_strip <= $num_strips )
 	set strip=$strip_list[$count_strip]
-    set polar=$polar_list[$count_strip]
+        set polar=$polar_list[$count_strip]
 
 	cd $WORKINGDIR/SLC
 
@@ -464,7 +476,7 @@ while ( $count_strip <= $num_strips )
 	# in case of a long data take : download orbits and write hdr file
 	# an orbit file has already be written, based on the metadata
 	# this part of the script allows for overwriting the file
-	if ( $num_files_ante > 0 ) then
+	if ( $DOWNLOAD_ORB == "yes" ) then
 #        if ( $num_files_ante > 2 ) then
         	echo "This is a long strip : downloading orbit files from ESA Sentinel-1 QC web site"
         	echo $DIR_IMG_ante[1] $DIR_IMG_ante[$num_files_ante]
