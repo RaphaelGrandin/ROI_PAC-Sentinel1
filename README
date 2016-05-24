@@ -44,7 +44,7 @@ during the process.
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-DISCLOSER
+WARNING
 
 ROI_PAC is a copyrighted software that requires a license.
 Licenses are available at no charge for non-commercial use
@@ -102,6 +102,7 @@ SKIP_BEG_ante = (integer) skip this number of bursts at the top of first master 
 SKIP_END_ante = (integer) skip this number of bursts at the bottom of last master image
 SKIP_BEG_post = (integer) skip this number of bursts at the top of first slave image
 SKIP_END_post = (integer) skip this number of bursts at the bottom of last slave image
+SPECTRAL_DIV  = (yes or no) run (yes) or skip (no) spectral diversity. Default: yes.
 
  
 Finally, the user copies the file named "S1-ROI_PAC_00_batch.sh" (located in directory "scripts")
