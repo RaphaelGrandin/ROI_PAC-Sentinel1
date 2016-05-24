@@ -14,10 +14,13 @@
 import sys,os
 import array
 import numpy
-import matplotlib.pyplot as plt
 import cmath as cm
 import mpmath
 from colorsys import hls_to_rgb
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 # # # # # # # # # # # # # #
 # # Define a few variables
