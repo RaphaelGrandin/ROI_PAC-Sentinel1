@@ -15,7 +15,6 @@ import collections
 import datetime, getopt, glob, os, sys, math
 import xml.etree.ElementTree
 import numpy
-from matplotlib.pyplot import *
 
 # set a few numbers    
 C = 299792458.0 # Speed of light
