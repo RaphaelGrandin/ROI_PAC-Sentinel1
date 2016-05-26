@@ -9,7 +9,7 @@
 ### Download Sentinel-1 orbit files
 ####################################################
 
-
+date
 
 set myPath=/home/rgrandin/S1-ROI_PAC_V2.1
 

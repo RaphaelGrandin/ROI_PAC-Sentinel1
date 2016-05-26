@@ -12,6 +12,7 @@
 ### following method from : Grandin et al. 2016, GRL
 ####################################################
 
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #

@@ -11,6 +11,7 @@
 ### + deramping accordingly (only for the slave)
 ####################################################
 
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -72,6 +73,8 @@ while ( $count <= $num_lines_param_file )
                 set SKIP_END_post=$fieldcontent
         else if ( $fieldname == "SPECTRAL_DIV" ) then
                 set SPECTRAL_DIV=($fieldcontent)
+        else if ( $fieldname == "OVERLAP" ) then
+                set OVERLAP=($fieldcontent)
         else if ( $fieldname == "FULL_RES" ) then
                 set FULL_RES=$fieldcontent
 	else
@@ -157,24 +160,50 @@ if ( ! $?SKIP_END_post ) then
         set SKIP_END_post = 0
 endif
 
+
 ### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
 if ( ! $?SPECTRAL_DIV ) then
         set SPECTRAL_DIV="yes"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV (default)."
+        echo " > Spectral diversity will be computed."
 else if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
-        echo "Setting SPECTRAL_DIV to \"yes\" (default)."
         set SPECTRAL_DIV="yes"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be computed."
 else
-        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+        set SPECTRAL_DIV="no"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be skipped."
+endif
+
+### Check if user wants to split each overlap in a different file (default) or fill between overlaps
+if ( ! $?OVERLAP ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP (default)."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else if ( $OVERLAP != "fill" ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else
+        set OVERLAP="fill"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be displayed into a single SLC / interferogram."
 endif
 
 ### Check if user wants to process at full resolution (default : FULL_RES="yes")
 if ( ! $?FULL_RES ) then
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES (default)."
+        echo " > Interferograms will be computed at full resolution."
 else if ( $FULL_RES != "no" && $FULL_RES != "No" && $FULL_RES != "NO" && $FULL_RES != "0" ) then
-        echo "Setting FULL_RES to \"yes\" (default)."
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at full resolution."
 else
-        echo "Full resolution processing will be performed (FULL_RES=$FULL_RES)."
+        set FULL_RES="no"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at lower resolution."
 endif
 
 ### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
@@ -217,7 +246,7 @@ set polar_list=$argv[3]
 echo "Polar list : " $polar_list
 
 
-if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
+if ( $SPECTRAL_DIV == "yes" ) then
 
 # # # # # # # # # # # # # # # # # 
 # # Spectral diversity Step 2 # #
@@ -230,6 +259,7 @@ if ( ! -e $WORKINGDIR/SLC ) then
 	exit
 endif
 
+
 @ count_strip = 1
 while ( $count_strip <= $num_strips )
     set strip=$strip_list[$count_strip]
@@ -239,6 +269,8 @@ while ( $count_strip <= $num_strips )
 	# # Go back to the SLC in order to adjust the lag 
 	cd $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
 	
+if ( $OVERLAP == "fill" ) then
+
     # # Cleanup backward- and forward-looking SLCs
     rm -f ${LABEL_ante}_${strip}_${polar}_bw.slc ${LABEL_ante}_${strip}_${polar}_fw.slc
     rm -f ${LABEL_post}_${strip}_${polar}_bw.slc ${LABEL_post}_${strip}_${polar}_fw.slc
@@ -259,6 +291,7 @@ while ( $count_strip <= $num_strips )
 		echo "Exit..."
 	        #exit
 	endif
+endif
 
 	# Read lag deduced from offsets (Step 2)
 	set outputSDFile=$WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${LABEL_ante}_${strip}_${polar}_Overlap_sdFit.rsc
@@ -339,23 +372,26 @@ while ( $count_strip <= $num_strips )
                 echo $strip $directory
 
                 echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
-                #echo " --skip_beg ${SKIP_BEG_post} --skip_end ${SKIP_END_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 if ($scene == 1) then
                         echo " --skip_beg ${SKIP_BEG_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
-                        #echo " --skip_end 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
-                        echo " --total_number_of_bursts $totalNumberOfBurstsPost " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 else if ($scene == $num_files_post) then
-                        #echo " --skip_beg 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                         echo " --skip_end ${SKIP_END_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 else   
-                        echo " --skip_beg 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
-                        echo " --skip_end 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
+                echo " --skip_beg 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
+                echo " --skip_end 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 endif
+                echo " --total_number_of_bursts $totalNumberOfBurstsPost " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 echo " --azshift_mean ${COEFF_CONSTANT_FINAL} --azshift_azimuth ${COEFF_SLOPE_Y_FINAL} --azshift_range ${COEFF_SLOPE_X_FINAL} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 if ($num_files_post != 1) then
                         echo " --number_of_files $num_files_post " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
                 endif
-		if ($scene != 1) then
+		if ($scene == 1) then
+			# Set first burst number in slave image to fit with burst number of master image
+			set fileGlobalBurstIndex=`head -1 ${LABEL_ante}_${strip}_${polar}_Overlap.txt | awk '{print $1 - 2}'`
+			if (fileGlobalBurstIndex != "") then
+                      echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
+            endif
+		else
 			echo " --file_order Append "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_synclag_sd.txt
 			# get number of bursts already written to file
 			set fileGlobalBurstIndex=`tail -1 ${LABEL_post}_${strip}_${polar}_Overlap.txt | awk '{print $1}'`
@@ -391,6 +427,7 @@ while ( $count_strip <= $num_strips )
 
 	@ count_strip ++
 end
+
 else
         echo "Skipping spectral diversity step!"
 endif

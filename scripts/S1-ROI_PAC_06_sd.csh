@@ -13,7 +13,7 @@
 ### using linear relationship.
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -67,6 +67,8 @@ while ( $count <= $num_lines_param_file )
 		set LOOKS_AZIMUTH=$fieldcontent
         else if ( $fieldname == "SPECTRAL_DIV" ) then
                 set SPECTRAL_DIV=($fieldcontent)
+        else if ( $fieldname == "OVERLAP" ) then
+                set OVERLAP=($fieldcontent)
         else if ( $fieldname == "FULL_RES" ) then
                 set FULL_RES=$fieldcontent
 	else
@@ -134,33 +136,52 @@ if ( ! $?SKIP_END_post ) then
         set SKIP_END_post = 0
 endif
 
+
 ### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
 if ( ! $?SPECTRAL_DIV ) then
         set SPECTRAL_DIV="yes"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV (default)."
+        echo " > Spectral diversity will be computed."
 else if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
-        echo "Setting SPECTRAL_DIV to \"yes\" (default)."
         set SPECTRAL_DIV="yes"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be computed."
 else
-        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+        set SPECTRAL_DIV="no"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be skipped."
+endif
+
+### Check if user wants to split each overlap in a different file (default) or fill between overlaps
+if ( ! $?OVERLAP ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP (default)."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else if ( $OVERLAP != "fill" ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else
+        set OVERLAP="fill"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be displayed into a single SLC / interferogram."
 endif
 
 ### Check if user wants to process at full resolution (default : FULL_RES="yes")
 if ( ! $?FULL_RES ) then
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES (default)."
+        echo " > Interferograms will be computed at full resolution."
 else if ( $FULL_RES != "no" && $FULL_RES != "No" && $FULL_RES != "NO" && $FULL_RES != "0" ) then
-        echo "Setting FULL_RES to \"yes\" (default)."
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at full resolution."
 else
-        echo "Full resolution processing will be performed (FULL_RES=$FULL_RES)."
+        set FULL_RES="no"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at lower resolution."
 endif
 
-### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
-### Default behaviour : set SPECTRAL_DIV back to "no"
-if ( $SPECTRAL_DIV == "yes" && $FULL_RES != "yes" ) then
-        echo "SPECTRAL_DIV=yes and FULL_RES=no are incompatible."
-        set SPECTRAL_DIV="no"
-        echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
-endif
 
 set num_files_ante=$#DIR_IMG_ante
 set num_files_post=$#DIR_IMG_post
@@ -193,7 +214,7 @@ echo "Strip list : " $strip_list
 set polar_list=$argv[3]
 echo "Polar list : " $polar_list
 
-if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
+if ( $SPECTRAL_DIV == "yes" ) then
 
 # # # # # # # # # # # # # # # # # 
 # # Spectral diversity Step 1 # #
@@ -206,6 +227,16 @@ if ( ! -e $WORKINGDIR/SLC ) then
 	exit
 endif
 
+if ( $SPECTRAL_DIV == "yes" ) then
+        # normally this directory should exist
+        if ( ! -e $WORKINGDIR/OVL ) then
+                echo "Directory "OVL" does not exist!"
+                echo "Something is wrong."
+                echo "Exit..."
+                exit
+        endif
+endif
+
 @ count_strip = 1
 while ( $count_strip <= $num_strips )
     set strip=$strip_list[$count_strip]
@@ -213,106 +244,280 @@ while ( $count_strip <= $num_strips )
 
     echo strip $strip polar $polar
 
-	cd $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
 	
-	# # # # save original SLCs
+	# New method, faster but less accurate
+        if ( $OVERLAP == "split" ) then
 
-	# # Master
-	if ( ! -e ${LABEL_ante}_${strip}_${polar}_ORIG.slc ) then
-		mv ${LABEL_ante}_${strip}_${polar}.slc ${LABEL_ante}_${strip}_${polar}_ORIG.slc
-	else
-		echo "Warning : ${LABEL_ante}_${strip}_${polar}_ORIG.slc already exists!"
-		echo "Something is wrong."
-		echo "Exit..."
-        exit
-	endif	
+		cd $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
+	
+		## Import files necessary for interferogram calculation
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/${LABEL_ante}-${LABEL_post}_resamp.in .
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/${LABEL_ante}-${LABEL_post}_cull.off .
+		set resampInFile="${LABEL_ante}-${LABEL_post}_resamp.in"
+		set cullInFile="${LABEL_ante}-${LABEL_post}_cull.off"
+
+		# Forward and backward interferograms
+		foreach SLCfileMaster (`ls ${LABEL_ante}_${strip}_${polar}_ovl_???_?w.slc`)
+	
+			# File names
+			set overlapNumber=`echo $SLCfileMaster:r | awk '{print substr($1,length($1)-5,3)}'`
+			set overlapType=`echo $SLCfileMaster:r | awk '{print substr($1,length($1)-1,2)}'`
+			set SLCfileSlave=`ls ${LABEL_post}_${strip}_${polar}_ovl_${overlapNumber}_${overlapType}.slc`
+			set resampOutFile="${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_${overlapType}_resamp.in"
+			set interfOutFile="${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_${overlapType}.int"
+			set ampOutFile="${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_${overlapType}.amp"
+			set cullOutFile="${LABEL_ante}-${LABEL_post}_cull_ovl_${overlapNumber}_${overlapType}.off"
+
+			echo "Processing $SLCfileMaster -- $SLCfileSlave to generate $interfOutFile"
+			
+			# Catch necessary information
+			set NumRanSampIm1=`grep "Number of Range Samples Image 1" $resampInFile | awk '{print $NF}'`
+			set NumRanSampIm2=`grep "Number of Range Samples Image 2" $resampInFile | awk '{print $NF}'`
+			set StartLine=`grep "Starting Line, Number of Lines, and First Line Offset" $resampInFile | awk '{print $(NF-2)}'`
+			set NumLines=`grep "Starting Line, Number of Lines, and First Line Offset" $resampInFile | awk '{print $(NF-1)}'`
+			set FirstLineOffset=`grep "Starting Line, Number of Lines, and First Line Offset" $resampInFile | awk '{print $(NF)}'`
+			set FirstLineOffsetShift=`awk '{if($1=='$overlapNumber') print $2}' ${LABEL_ante}_${strip}_${polar}_Overlap.txt`
+			set RadWavelength=`grep "Radar Wavelength" $resampInFile | awk '{print $NF}'`
+			set SlantRangePxSpacing=`grep "Slant Range Pixel Spacing" $resampInFile | awk '{print $NF}'`
+			set YMAX=`use_rsc.pl ${SLCfileMaster}.rsc read FILE_LENGTH`
+
+			# Shift offsets
+			awk '{printf("%6d%11.3f%7d%12.3f%11.5f%11.6f%11.6f%11.6f\n", $1,$2,($3)-('$FirstLineOffsetShift'),$4,$5,$6,$7,$8)}' $cullInFile > $cullOutFile 
 		
-	# # Slave
-    if ( ! -e ${LABEL_post}_${strip}_${polar}_ORIG.slc ) then
-        mv ${LABEL_post}_${strip}_${polar}.slc ${LABEL_post}_${strip}_${polar}_ORIG.slc
-    else
-        echo "Warning : ${LABEL_post}_${strip}_${polar}_ORIG.slc already exists!"
-		echo "Something is wrong."
-		echo "Exit..."
-        exit
-    endif             
-
-    # # # # # # # # # # # 
-	# # # Forward-looking interferogram
+			# Write input file for resamp_roi
+			echo "" > $resampOutFile
+			echo "Image Offset File Name                                  (-)     = $cullOutFile"          >> $resampOutFile
+			echo "Display Fit Statistics to Screen                        (-)     = No Fit Stats"         >> $resampOutFile
+			echo "Number of Fit Coefficients                              (-)     = 6"                    >> $resampOutFile
+			echo "SLC Image File 1                                        (-)     = $SLCfileMaster"       >> $resampOutFile
+			echo "Number of Range Samples Image 1                         (-)     = $NumRanSampIm1"       >> $resampOutFile
+			echo "SLC Image File 2                                        (-)     = $SLCfileSlave"        >> $resampOutFile
+			echo "Number of Range Samples Image 2                         (-)     = $NumRanSampIm2"       >> $resampOutFile
+			echo "Output Interferogram File                               (-)     = $interfOutFile"       >> $resampOutFile
+			echo "Multi-look Amplitude File                               (-)     = $ampOutFile"          >> $resampOutFile
+			echo "Starting Line, Number of Lines, and First Line Offset   (-)     = $StartLine $YMAX $FirstLineOffset" >> $resampOutFile
+			echo "Doppler Cubic Fit Coefficients - PRF Units              (-)     = 0 0 0 0"              >> $resampOutFile
+			echo "Radar Wavelength                                        (m)     = $RadWavelength"       >> $resampOutFile
+			echo "Slant Range Pixel Spacing                               (m)     = $SlantRangePxSpacing" >> $resampOutFile
+			echo "Number of Range and Azimuth Looks                       (-)     = 1 1"                  >> $resampOutFile
+			echo "Flatten with offset fit?                                (-)     = No"                   >> $resampOutFile
+			
+			# Run resamp_roi to compute interferogram
+			$INT_BIN/resamp_roi $resampOutFile
 	
-	# temporarily replace previous SLCs with forward-looking SLCs
-    cd $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
-	ln -sf ${LABEL_ante}_${strip}_${polar}_fw.slc ${LABEL_ante}_${strip}_${polar}.slc
-    ln -sf ${LABEL_post}_${strip}_${polar}_fw.slc ${LABEL_post}_${strip}_${polar}.slc
-	# calculate the interferogram
-	cd $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
-    cd INT
-    rm -fr ${LABEL_ante}-${LABEL_post}.int ${LABEL_ante}-${LABEL_post}.amp
-    $INT_BIN/resamp_roi ${LABEL_ante}-${LABEL_post}_resamp.in > ${LABEL_ante}-${LABEL_post}_resamp.out
-    rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int radar_HDR.unw
-    $INT_BIN/diffnsim diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
-    rm -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int
-    look.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int $LOOKS_RANGE $LOOKS_AZIMUTH
-    # save the interferogram for Spectral diversity calculation
-    mv -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_fw_${LOOKS_RANGE}rlks.int
-    cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_fw_${LOOKS_RANGE}rlks.int.rsc
+			cp -f ${SLCfileMaster}.rsc ${interfOutFile}.rsc
+			cp -f ${SLCfileMaster}.rsc ${ampOutFile}.rsc
+			
+			# Multilook
+			look.pl ${interfOutFile} $LOOKS_RANGE $LOOKS_AZIMUTH
+			look.pl ${ampOutFile} $LOOKS_RANGE $LOOKS_AZIMUTH
 
-
-    # # # # # # # # # # # 
-    # # Backward-looking interferogram
+	                # Cleanup
+			rm -fr $cullOutFile
+		
+		end
 	
-	# temporarily replace previous SLCs with backward-looking SLCs
-	cd $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
-    ln -sf ${LABEL_ante}_${strip}_${polar}_bw.slc ${LABEL_ante}_${strip}_${polar}.slc
-    ln -sf ${LABEL_post}_${strip}_${polar}_bw.slc ${LABEL_post}_${strip}_${polar}.slc
-	# calculate the interferogram
-    cd $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
-    cd INT
-    rm -fr ${LABEL_ante}-${LABEL_post}.int ${LABEL_ante}-${LABEL_post}.amp
-    $INT_BIN/resamp_roi ${LABEL_ante}-${LABEL_post}_resamp.in > ${LABEL_ante}-${LABEL_post}_resamp.out
-    rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int radar_HDR.unw
-	$INT_BIN/diffnsim diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
-    rm -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int
-	look.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int $LOOKS_RANGE $LOOKS_AZIMUTH
-    # save the interferogram for Spectral diversity calculation
-    mv -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_bw_${LOOKS_RANGE}rlks.int
-    cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_bw_${LOOKS_RANGE}rlks.int.rsc
+		# Double difference interferograms
+		foreach IntFileFw (`ls ${LABEL_ante}-${LABEL_post}_ovl_???_fw.int`)
 
-    # # # # # # # # # # # 
-	# # Cross-interferogram (xint)
+			# File names
+			set overlapNumber=`echo $IntFileFw:r | awk '{print substr($1,length($1)-5,3)}'`
+			set IntFileBw=`ls ${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_bw.int`
+			
+			set IntFileFwLook=`echo ${IntFileFw:r}_${LOOKS_RANGE}rlks.int`
+			set IntFileBwLook=`echo ${IntFileBw:r}_${LOOKS_RANGE}rlks.int`
 	
-    # Set a few variables
-    set MyWidthFullRes=`use_rsc.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int.rsc read WIDTH`	
-    set MyLengthFullRes=`use_rsc.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int.rsc read FILE_LENGTH`    
-    set MyWidthLooked=`use_rsc.pl ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc read WIDTH`
-    set MyLengthLooked=`use_rsc.pl ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc read FILE_LENGTH`
-    # Compute the interferogram difference
-	add_cpx ${LABEL_ante}-${LABEL_post}-sim_HDR_fw_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_bw_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int $MyWidthLooked $MyLengthLooked -1	
-	cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int.rsc
+			set AmpFileFw=`ls ${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_fw.amp`
+			set AmpFileFwLook=`echo ${AmpFileFw:r}_${LOOKS_RANGE}rlks.amp`
 
-	# Calculate the coherence
-	if ( ! -e ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_ORIG_${LOOKS_RANGE}rlks.int ) then
-		cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_ORIG_${LOOKS_RANGE}rlks.int
-		cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_ORIG_${LOOKS_RANGE}rlks.int.rsc
-		make_cor.pl ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks
-		# Replace amplitude with coherence
-		cpx2mag_phs ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int junk phs $MyWidthLooked
-		rmg2mag_phs ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.cor junk cor $MyWidthLooked
-		mag_phs2cpx cor phs ${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int $MyWidthLooked
-		rm -fr junk phs cor
+			set AmpFileBw=`ls ${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_bw.amp`
+			set AmpFileBwLook=`echo ${AmpFileBw:r}_${LOOKS_RANGE}rlks.amp`
+		
+			set OutFileXint=`echo ${LABEL_ante}-${LABEL_post}_ovl_${overlapNumber}_xint.int`
+			set OutFileXintLook=`echo ${OutFileXint:r}_${LOOKS_RANGE}rlks.int`
+			echo "Processing $IntFileFwLook -- $IntFileBwLook to generate $OutFileXintLook"
+
+		    	# Set a few variables
+			set MyWidthFullRes=`use_rsc.pl ${IntFileFwLook}.rsc read WIDTH`	
+			set MyLengthFullRes=`use_rsc.pl ${IntFileFwLook}.rsc read FILE_LENGTH`    
+			set MyWidthLooked=`use_rsc.pl ${IntFileFwLook}.rsc read WIDTH`
+			set MyLengthLooked=`use_rsc.pl ${IntFileFwLook}.rsc read FILE_LENGTH`
+
+			# Compute the interferogram difference
+			$INT_BIN/add_cpx $IntFileFwLook $IntFileBwLook $OutFileXintLook $MyWidthLooked $MyLengthLooked -1	
+			cp -f $IntFileFwLook.rsc $OutFileXintLook.rsc
+
+			# Calculate the coherence
+			make_cor.pl ${OutFileXintLook:r} ${AmpFileFwLook:r} ${OutFileXintLook:r}
+
+			# Replace amplitude with coherence
+			$INT_BIN/cpx2mag_phs $OutFileXintLook junk phs $MyWidthLooked
+			$INT_BIN/rmg2mag_phs ${OutFileXintLook:r}.cor junk cor $MyWidthLooked
+			$INT_BIN/mag_phs2cpx cor phs $OutFileXintLook $MyWidthLooked
+			rm -fr junk phs cor
+
+                	# Cleanup
+                	rm -fr $IntFileBw $IntFileBw.rsc
+                	rm -fr $IntFileFw $IntFileFw.rsc
+                	rm -fr $AmpFileFw $AmpFileFw.rsc
+                	rm -fr $AmpFileBw $AmpFileBw.rsc
+                	rm -fr $IntFileFwLook $IntFileBwLook $IntFileFwLook.rsc $IntFileBwLook.rsc
+
+		end
+
+	# Old method (more accurate, but takes longer)
+        else if ( $OVERLAP == "fill" ) then
+
+		cd $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
+
+		## Import files necessary for interferogram calculation
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/${LABEL_ante}-${LABEL_post}_resamp.in .
+                cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/${LABEL_ante}-${LABEL_post}_cull.off .
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
+		ln -sf $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/radar.hgt .
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/radar.hgt.rsc .
+
+		set resampInFile="${LABEL_ante}-${LABEL_post}_resamp.in"
+		set cullInFile="${LABEL_ante}-${LABEL_post}_cull.off"
+		set diffnsimInFile="diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in"
+		
+
+		# File names
+                set SLCfileMaste=`ls ${LABEL_ante}_${strip}_${polar}_fw.slc`
+                set SLCfileSlave=`ls ${LABEL_post}_${strip}_${polar}_fw.slc`
+                set resampOutFile="${LABEL_ante}-${LABEL_post}_fw_resamp.in"
+                set interfOutFile="${LABEL_ante}-${LABEL_post}.int"
+                set ampOutFile="${LABEL_ante}-${LABEL_post}.amp"
+                set ampOutFileLooked="${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.amp"
+                set interfSimOutFile="${LABEL_ante}-${LABEL_post}-sim_HDR.int"
+                set interfSimOutFileLooked="${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int"
+
+
+                # # # # # # # # # # # 
+                # # # Forward-looking interferogram
+                set SLCfileMasteFw=`ls ${LABEL_ante}_${strip}_${polar}_fw.slc`
+                set SLCfileSlaveFw=`ls ${LABEL_post}_${strip}_${polar}_fw.slc`
+                set interfOutFileFw="${LABEL_ante}-${LABEL_post}-sim_HDR_fw_${LOOKS_RANGE}rlks.int"
+
+		echo "Processing $SLCfileMasterFw -- $SLCfileSlaveFw to generate $interfOutFileFw"
+
+		ln -sf $SLCfileMasteFw $SLCfileMaste
+                ln -sf $SLCfileSlaveFw $SLCfileSlave
+
+                # Run resamp_roi to compute interferogram
+		rm -fr $interfOutFile $ampOutFile
+		$INT_BIN/resamp_roi $resampInFile
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/$interfOutFile.rsc $interfOutFile.rsc
+		cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/$ampOutFile.rsc    $ampOutFile.rsc
+		# Multilook amplitude
+		rm -fr $ampOutFileLooked
+                look.pl ${ampOutFile} $LOOKS_RANGE $LOOKS_AZIMUTH
+		# Subtract simulation
+		rm -fr $interfSimOutFile radar_HDR.unw
+		$INT_BIN/diffnsim $diffnsimInFile
+                rm -fr $interfSimOutFileLooked
+                look.pl $interfSimOutFile $LOOKS_RANGE $LOOKS_AZIMUTH
+
+                # save the interferogram for Spectral diversity calculation
+                mv -f $interfSimOutFileLooked     $interfOutFileFw
+		cp -f $interfSimOutFileLooked.rsc $interfOutFileFw.rsc
+
+                # # # # # # # # # # # 
+                # # # Backward-looking interferogram
+                set SLCfileMasteBw=`ls ${LABEL_ante}_${strip}_${polar}_bw.slc`
+                set SLCfileSlaveBw=`ls ${LABEL_post}_${strip}_${polar}_bw.slc`
+                set interfOutFileBw="${LABEL_ante}-${LABEL_post}-sim_HDR_bw_${LOOKS_RANGE}rlks.int"
+
+                echo "Processing $SLCfileMasterBw -- $SLCfileSlaveBw to generate $interfOutFileBw"
+
+                ln -sf $SLCfileMasteBw $SLCfileMaste
+                ln -sf $SLCfileSlaveBw $SLCfileSlave
+
+                # Run resamp_roi to compute interferogram
+                rm -fr $interfOutFile $ampOutFile
+                $INT_BIN/resamp_roi $resampInFile
+                cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/$interfOutFile.rsc $interfOutFile.rsc
+                cp -f $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/$ampOutFile.rsc    $ampOutFile.rsc
+                # Subtract simulation
+                rm -fr $interfSimOutFile radar_HDR.unw
+                $INT_BIN/diffnsim $diffnsimInFile
+                rm -fr $interfSimOutFileLooked
+                look.pl $interfSimOutFile $LOOKS_RANGE $LOOKS_AZIMUTH
+
+                # save the interferogram for Spectral diversity calculation
+                mv -f $interfSimOutFileLooked     $interfOutFileBw
+                cp -f $interfSimOutFileLooked.rsc $interfOutFileBw.rsc
+
+		# cleanup
+		rm -fr radar_HDR.unw
+
+    		# # # # # # # # # # # 
+    		# # # Double-difference interferogram (xint)
+    		# Set a few variables
+    		set MyWidthLooked=`use_rsc.pl  $interfSimOutFileLooked.rsc read WIDTH`
+    		set MyLengthLooked=`use_rsc.pl $interfSimOutFileLooked.rsc read FILE_LENGTH`
+		set XintOutFile="${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int"
+                set XintOutFileOrig="${LABEL_ante}-${LABEL_post}-sim_HDR_xint_ORIG_${LOOKS_RANGE}rlks.int"
+		set CorOutFile="${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.cor"
+
+                echo "Processing $interfOutFileFw -- $interfOutFileBw to generate $XintOutFile"
+
+    		# Compute the interferogram difference
+            	$INT_BIN/add_cpx $interfOutFileFw $interfOutFileBw $XintOutFile $MyWidthLooked $MyLengthLooked -1
+        	cp -f $interfSimOutFileLooked.rsc $XintOutFile.rsc
+
+        	# Calculate the coherence
+        	if ( ! -e $XintOutFileOrig ) then
+                	cp -f $XintOutFile     $XintOutFileOrig
+                        cp -f $XintOutFile.rsc $XintOutFileOrig.rsc
+                	make_cor.pl ${XintOutFile:r} ${ampOutFileLooked:r} ${XintOutFile:r}
+                	# Replace amplitude with coherence
+			$INT_BIN/cpx2mag_phs $XintOutFile junk phs $MyWidthLooked
+			$INT_BIN/rmg2mag_phs $CorOutFile  junk cor $MyWidthLooked
+			$INT_BIN/mag_phs2cpx cor phs $XintOutFile $MyWidthLooked
+                	rm -fr junk phs cor
+		else
+			echo "File $XintOutFileOrig already exists!"
+        		echo "Something is wrong."
+        		echo "Exit..."
+        	endif
+
 	endif
 
-	# Call python program to estimate best-fitting phase plane
-    cd $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
-	python $dir/python/fit_plane.py $MyWidthLooked $MyLengthLooked $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/INT/${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${LABEL_ante}_${strip}_${polar}_Overlap.txt
+        # # # # # # # # # # # 
+        # # # Fit plane on double-difference interferogram
 
-	@ count_strip ++
+        # Call python program to estimate best-fitting phase plane
+        cd $WORKINGDIR
+        if ( $OVERLAP == "split" ) then
+	    cd $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
+            set example_file=`ls $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${LABEL_ante}-${LABEL_post}_ovl_???_xint_${LOOKS_RANGE}rlks.int | head -1`
+            set INPUT_XINT="${example_file}"
+            set SPLIT_OVERLAP="yes"
+        else
+	    cd $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
+            set INPUT_XINT="$WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${LABEL_ante}-${LABEL_post}-sim_HDR_xint_${LOOKS_RANGE}rlks.int"
+            set SPLIT_OVERLAP="no"
+        endif
+	set MyWidthLooked=`use_rsc.pl $INPUT_XINT read WIDTH`
+	set MyLengthLooked=`use_rsc.pl $INPUT_XINT read FILE_LENGTH`
+        set INPUT_OVERLAP="$WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${LABEL_ante}_${strip}_${polar}_Overlap.txt"
+	
+	echo " $dir/python/fit_plane.py $MyWidthLooked $MyLengthLooked $INPUT_XINT $INPUT_OVERLAP $SPLIT_OVERLAP" > ${LABEL_ante}_${strip}_${polar}_fitplane_command.txt
+	set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_fitplane_command.txt`
+        echo ""
+        echo " > > Command : " $ARGS_PYTHON
+        echo ""
+	python $ARGS_PYTHON > ${LABEL_ante}_${strip}_${polar}_fitplane_log.txt
+
+        @ count_strip ++
 end
 
 else
-	echo "Skipping spectral diversity step!"
+        echo "Skipping spectral diversity step!"
 endif
 exit
+
 
 # * Copyright (C) 2016 R.GRANDIN
 # #

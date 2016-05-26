@@ -14,8 +14,8 @@
 import collections
 import datetime, getopt, glob, os, sys, math
 import xml.etree.ElementTree
-import numpy
-from matplotlib.pyplot import *
+import numpy as np
+#from matplotlib.pyplot import *
 
 # set a few numbers    
 C = 299792458.0 # Speed of light
@@ -410,49 +410,49 @@ valsMerge["VELOCITY"] = orbVelocity
 
 # # extrapolate orbits using third degree polynomial
 # positions
-orbPosXExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbPosX, deg=3))
-orbPosYExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbPosY, deg=3))
-orbPosZExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbPosZ, deg=3))
+orbPosXExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbPosX, deg=3))
+orbPosYExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbPosY, deg=3))
+orbPosZExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbPosZ, deg=3))
 # velocities
-orbVelXExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbVelX, deg=3))
-orbVelYExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbVelY, deg=3))
-orbVelZExtrapPoly = numpy.poly1d(numpy.polyfit(orbTimeSeconds, orbVelZ, deg=3))
+orbVelXExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbVelX, deg=3))
+orbVelYExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbVelY, deg=3))
+orbVelZExtrapPoly = np.poly1d(np.polyfit(orbTimeSeconds, orbVelZ, deg=3))
 
 # # sample extrapolated orbit at appropriate rate
 # # build list of dates before first line
-orbTimeSecondsBef=numpy.linspace(orbTimeSeconds[0]-lenExtrapOrbit,orbTimeSeconds[0],num=lenExtrapOrbit,endpoint=False)
+orbTimeSecondsBef=np.linspace(orbTimeSeconds[0]-lenExtrapOrbit,orbTimeSeconds[0],num=lenExtrapOrbit,endpoint=False)
 # # build list of dates between first line and last line
-orbTimeSecondsAll=numpy.linspace(orbTimeSeconds[0]-lenExtrapOrbit,orbTimeSeconds[len(orbTimeSeconds)-1]+lenExtrapOrbit,
+orbTimeSecondsAll=np.linspace(orbTimeSeconds[0]-lenExtrapOrbit,orbTimeSeconds[len(orbTimeSeconds)-1]+lenExtrapOrbit,
 	num=int(orbTimeSeconds[len(orbTimeSeconds)-1]-orbTimeSeconds[0]+(lenExtrapOrbit*2)),
 	endpoint=False)
 # # build list of dates after last line
-orbTimeSecondsAft=numpy.linspace(orbTimeSeconds[len(orbTimeSeconds)-1]+1,orbTimeSeconds[len(orbTimeSeconds)-1]+lenExtrapOrbit,num=lenExtrapOrbit)
+orbTimeSecondsAft=np.linspace(orbTimeSeconds[len(orbTimeSeconds)-1]+1,orbTimeSeconds[len(orbTimeSeconds)-1]+lenExtrapOrbit,num=lenExtrapOrbit)
 
 # # do the sampling
 # positions
-orbPosXExtrapValBef=numpy.polyval(orbPosXExtrapPoly,orbTimeSecondsBef)
-orbPosYExtrapValBef=numpy.polyval(orbPosYExtrapPoly,orbTimeSecondsBef)
-orbPosZExtrapValBef=numpy.polyval(orbPosZExtrapPoly,orbTimeSecondsBef)
+orbPosXExtrapValBef=np.polyval(orbPosXExtrapPoly,orbTimeSecondsBef)
+orbPosYExtrapValBef=np.polyval(orbPosYExtrapPoly,orbTimeSecondsBef)
+orbPosZExtrapValBef=np.polyval(orbPosZExtrapPoly,orbTimeSecondsBef)
 
-orbPosXExtrapValAll=numpy.polyval(orbPosXExtrapPoly,orbTimeSecondsAll)
-orbPosYExtrapValAll=numpy.polyval(orbPosYExtrapPoly,orbTimeSecondsAll)
-orbPosZExtrapValAll=numpy.polyval(orbPosZExtrapPoly,orbTimeSecondsAll)
+orbPosXExtrapValAll=np.polyval(orbPosXExtrapPoly,orbTimeSecondsAll)
+orbPosYExtrapValAll=np.polyval(orbPosYExtrapPoly,orbTimeSecondsAll)
+orbPosZExtrapValAll=np.polyval(orbPosZExtrapPoly,orbTimeSecondsAll)
 
-orbPosXExtrapValAft=numpy.polyval(orbPosXExtrapPoly,orbTimeSecondsAft)
-orbPosYExtrapValAft=numpy.polyval(orbPosYExtrapPoly,orbTimeSecondsAft)
-orbPosZExtrapValAft=numpy.polyval(orbPosZExtrapPoly,orbTimeSecondsAft)
+orbPosXExtrapValAft=np.polyval(orbPosXExtrapPoly,orbTimeSecondsAft)
+orbPosYExtrapValAft=np.polyval(orbPosYExtrapPoly,orbTimeSecondsAft)
+orbPosZExtrapValAft=np.polyval(orbPosZExtrapPoly,orbTimeSecondsAft)
 # velocities
-orbVelXExtrapValBef=numpy.polyval(orbVelXExtrapPoly,orbTimeSecondsBef)
-orbVelYExtrapValBef=numpy.polyval(orbVelYExtrapPoly,orbTimeSecondsBef)
-orbVelZExtrapValBef=numpy.polyval(orbVelZExtrapPoly,orbTimeSecondsBef)
+orbVelXExtrapValBef=np.polyval(orbVelXExtrapPoly,orbTimeSecondsBef)
+orbVelYExtrapValBef=np.polyval(orbVelYExtrapPoly,orbTimeSecondsBef)
+orbVelZExtrapValBef=np.polyval(orbVelZExtrapPoly,orbTimeSecondsBef)
 
-orbVelXExtrapValAll=numpy.polyval(orbVelXExtrapPoly,orbTimeSecondsAll)
-orbVelYExtrapValAll=numpy.polyval(orbVelYExtrapPoly,orbTimeSecondsAll)
-orbVelZExtrapValAll=numpy.polyval(orbVelZExtrapPoly,orbTimeSecondsAll)
+orbVelXExtrapValAll=np.polyval(orbVelXExtrapPoly,orbTimeSecondsAll)
+orbVelYExtrapValAll=np.polyval(orbVelYExtrapPoly,orbTimeSecondsAll)
+orbVelZExtrapValAll=np.polyval(orbVelZExtrapPoly,orbTimeSecondsAll)
 
-orbVelXExtrapValAft=numpy.polyval(orbVelXExtrapPoly,orbTimeSecondsAft)
-orbVelYExtrapValAft=numpy.polyval(orbVelYExtrapPoly,orbTimeSecondsAft)
-orbVelZExtrapValAft=numpy.polyval(orbVelZExtrapPoly,orbTimeSecondsAft)
+orbVelXExtrapValAft=np.polyval(orbVelXExtrapPoly,orbTimeSecondsAft)
+orbVelYExtrapValAft=np.polyval(orbVelYExtrapPoly,orbTimeSecondsAft)
+orbVelZExtrapValAft=np.polyval(orbVelZExtrapPoly,orbTimeSecondsAft)
 
 orbVelocity=[]
 orbTimeSecondsConcat=[]

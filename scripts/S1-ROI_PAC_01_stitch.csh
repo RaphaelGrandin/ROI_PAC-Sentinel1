@@ -12,7 +12,7 @@
 ### time origin of the deramping functions
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -72,8 +72,12 @@ while ( $count <= $num_lines_param_file )
 		set SKIP_END_ante=($fieldcontent)
 	else if ( $fieldname == "SKIP_END_post" ) then
 		set SKIP_END_post=($fieldcontent)
+        else if ( $fieldname == "DOWNLOAD_ORB" ) then
+                set DOWNLOAD_ORB=($fieldcontent)
         else if ( $fieldname == "SPECTRAL_DIV" ) then
                 set SPECTRAL_DIV=($fieldcontent)
+        else if ( $fieldname == "OVERLAP" ) then
+                set OVERLAP=($fieldcontent)
         else if ( $fieldname == "FULL_RES" ) then
                 set FULL_RES=$fieldcontent
 	else
@@ -168,24 +172,65 @@ else if ( $#SKIP_END_post != 1 ) then
 	set SKIP_END_post = $SKIP_END_post[$subswath]
 endif
 
+### Check if user wants to download orbits (default : DOWNLOAD_ORB="yes")
+if ( ! $?DOWNLOAD_ORB ) then
+        set DOWNLOAD_ORB="yes"
+        echo "Setting DOWNLOAD_ORB=$DOWNLOAD_ORB (default)."
+        echo " > Orbits will be downloaded."
+else if ( $DOWNLOAD_ORB != "no" && $DOWNLOAD_ORB != "No" && $DOWNLOAD_ORB != "NO" && $DOWNLOAD_ORB != "0" ) then
+        set DOWNLOAD_ORB="yes"
+        echo "Setting DOWNLOAD_ORB=$DOWNLOAD_ORB."
+        echo " > Orbits will be downloaded."
+else
+	set DOWNLOAD_ORB="no"
+        echo "Setting DOWNLOAD_ORB=$DOWNLOAD_ORB."
+        echo " > Download of orbit files will be skipped."
+endif
+
 ### Check if user wants to perform spectral diversity (default : SPECTRAL_DIV="yes")
 if ( ! $?SPECTRAL_DIV ) then
 	set SPECTRAL_DIV="yes"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV (default)."
+        echo " > Spectral diversity will be computed."
 else if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
-	echo "Setting SPECTRAL_DIV to \"yes\" (default)."
-	set SPECTRAL_DIV="yes"
+        set SPECTRAL_DIV="yes"
+	echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be computed."
 else
-	echo "Spectral diversity will be skipped (SPECTRAL_DIV=$SPECTRAL_DIV)."
+	set SPECTRAL_DIV="no"
+        echo "Setting SPECTRAL_DIV=$SPECTRAL_DIV."
+        echo " > Spectral diversity will be skipped."
 endif
+
+### Check if user wants to split each overlap in a different file (default) or fill between overlaps
+if ( ! $?OVERLAP ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP (default)."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else if ( $OVERLAP != "fill" ) then
+        set OVERLAP="split"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be split into different SLCs / interferograms."
+else
+        set OVERLAP="fill"
+        echo "Setting OVERLAP=$OVERLAP."
+        echo " > Overlap regions will be displayed into a single SLC / interferogram."
+endif
+
 
 ### Check if user wants to process at full resolution (default : FULL_RES="yes")
 if ( ! $?FULL_RES ) then
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES (default)."
+        echo " > Interferograms will be computed at full resolution."
 else if ( $FULL_RES != "no" && $FULL_RES != "No" && $FULL_RES != "NO" && $FULL_RES != "0" ) then
-        echo "Setting FULL_RES to \"yes\" (default)."
         set FULL_RES="yes"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at full resolution."
 else
-        echo "Full resolution processing will be performed (FULL_RES=$FULL_RES)."
+        set FULL_RES="no"
+        echo "Setting FULL_RES=$FULL_RES."
+        echo " > Interferograms will be computed at lower resolution."
 endif
 
 ### Setting SPECTRAL_DIV to "yes" and FULL_RES to "no" is currently not supported
@@ -260,10 +305,25 @@ if( ! -e SLC ) then
 	mkdir SLC
 endif
 
+# Create Overlap directory
+if ( $SPECTRAL_DIV == "yes" ) then
+	cd $WORKINGDIR
+	if( ! -e OVL ) then
+        	mkdir OVL
+	endif
+endif
+
+
 @ count_strip = 1
 while ( $count_strip <= $num_strips )
 	set strip=$strip_list[$count_strip]
-    set polar=$polar_list[$count_strip]
+        set polar=$polar_list[$count_strip]
+
+	if ( $SPECTRAL_DIV == "yes" ) then
+		if ( ! -e $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar} ) then
+			mkdir $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
+		endif
+	endif
 
 	cd $WORKINGDIR/SLC
 
@@ -464,7 +524,7 @@ while ( $count_strip <= $num_strips )
 	# in case of a long data take : download orbits and write hdr file
 	# an orbit file has already be written, based on the metadata
 	# this part of the script allows for overwriting the file
-	if ( $num_files_ante > 0 ) then
+	if ( $DOWNLOAD_ORB == "yes" ) then
 #        if ( $num_files_ante > 2 ) then
         	echo "This is a long strip : downloading orbit files from ESA Sentinel-1 QC web site"
         	echo $DIR_IMG_ante[1] $DIR_IMG_ante[$num_files_ante]
@@ -518,7 +578,7 @@ while ( $count_strip <= $num_strips )
 	cp -f $burst_comp_param_file $burst_comp_param_file_bw
 
 	# display incidence and squint angles
-	echo "INCIDENCE                                yes" >> $burst_comp_param_file
+	#echo "INCIDENCE                                yes" >> $burst_comp_param_file
 
 	# # run burst compensation / stitching step
 	
@@ -531,31 +591,31 @@ while ( $count_strip <= $num_strips )
 		# run make SLC
 
                 echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-                #echo " --skip_beg ${SKIP_BEG_ante} --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		if ($scene == 1) then
 			echo " --skip_beg ${SKIP_BEG_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-			#echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-			echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		else if ($scene == $num_files_ante) then
-            #echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 			echo " --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		else
 			echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 			echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		endif
+		echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		# if several input TIFF files are provided, append to end of output SLC file
                 if ($num_files_ante != 1) then
 					echo " --number_of_files $num_files_ante " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		endif
                 if ($scene != 1) then
-                                        echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-					# get number of bursts already written to file
-					set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_Overlap.txt | awk '{print $1}'`
-					if (fileGlobalBurstIndex != "") then
-						echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-					endif
+			echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+			# get number of bursts already written to file
+			set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_Overlap.txt | awk '{print $1}'`
+			if (fileGlobalBurstIndex != "") then
+				echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+			endif
                 endif
-                echo " --incidence True "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+		if ( $SPECTRAL_DIV == "yes" && $OVERLAP == "split" ) then
+			echo " --split_overlap yes "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+		endif
+                #echo " --incidence True "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt`
 		echo ""
@@ -607,105 +667,144 @@ while ( $count_strip <= $num_strips )
 	use_rsc.pl ${LABEL_ante}_${strip}_${polar}.slc.rsc merge ${LABEL_ante}_${strip}_${polar}.raw.rsc
 
 	# incidence angles
-	cp ${LABEL_ante}_${strip}_${polar}.slc.rsc ${LABEL_ante}_${strip}_${polar}_los.unw.rsc
+	#cp ${LABEL_ante}_${strip}_${polar}.slc.rsc ${LABEL_ante}_${strip}_${polar}_los.unw.rsc
 	#look.pl ${LABEL_ante}_${strip}_${polar}_los.unw $LOOKS_RANGE $LOOKS_AZIMUTH
 
-        if ( $SPECTRAL_DIV != "no" && $SPECTRAL_DIV != "No" && $SPECTRAL_DIV != "NO" && $SPECTRAL_DIV != "0" ) then
-
-    # # extract forward-looking SLC and backward-looking SLC for later Spectral Diversity step
-
-	# forward looking geometry
-        echo "OVERLAP                                  fw" >> $burst_comp_param_file_fw
-	@ scene = 1
-        while ($scene <= $num_files_ante )
-                set directory=$DIR_IMG_ante[$scene]
-                echo $strip $directory
-
-                echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                #echo " --skip_beg ${SKIP_BEG_ante} --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                if ($scene == 1) then
-                        echo " --skip_beg ${SKIP_BEG_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                        #echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                        echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                else if ($scene == $num_files_ante) then
-                        #echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                        echo " --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                else
-                        echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                        echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                endif
-                echo " --overlap_type Forward " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-		# if several input TIFF files are provided, append to end of output SLC file
-		if ($num_files_ante != 1) then
-                                        echo " --number_of_files $num_files_ante " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                endif
-                if ($scene != 1) then
-                                        echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-					# get number of bursts already written to file
-					set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_fw_Overlap.txt | awk '{print $1}'`
-					if (fileGlobalBurstIndex != "") then
-                                                echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-                                        endif
-                endif
-                echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
-		set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt`
-		echo ""
-		echo " > > Command : " $ARGS_PYTHON 
-		echo ""
-
-		python $ARGS_PYTHON > ${LABEL_ante}_${strip}_${polar}_scene${scene}_log_deburst_zerolag_fw.txt
-
-		@ scene += 1
-	end
-
-	cp -f ${LABEL_ante}_${strip}_${polar}.raw.rsc ${LABEL_ante}_${strip}_${polar}_fw.slc.rsc
-
-	# backward looking geometry
-        echo "OVERLAP                                  bw" >> $burst_comp_param_file_bw
-        @ scene = 1
-        while ($scene <= $num_files_ante )
-                set directory=$DIR_IMG_ante[$scene]
-                echo $strip $directory
-
-                echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                #echo " --skip_beg ${SKIP_BEG_ante} --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                if ($scene == 1) then
-                        echo " --skip_beg ${SKIP_BEG_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                        #echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                        echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                else if ($scene == $num_files_ante) then
-                        #echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                        echo " --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                else   
-                        #echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                        echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                endif
-                echo " --overlap_type Backward " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-		# if several input TIFF files are provided, append to end of output SLC file
-		if ($num_files_ante != 1) then
-			echo " --number_of_files $num_files_ante " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-		endif
-                if ($scene != 1) then
-                                        echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-					# get number of bursts already written to file
-					set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_bw_Overlap.txt | awk '{print $1}'`
-                                        if (fileGlobalBurstIndex != "") then
-                                                echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                                        endif
-		endif
-                echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
-                set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt`
-		echo ""
-                echo " > > Command : " $ARGS_PYTHON
-		echo ""
-
-                python $ARGS_PYTHON > ${LABEL_ante}_${strip}_${polar}_scene${scene}_log_deburst_zerolag_bw.txt
-
-                @ scene += 1
-        end
-
-	cp -f ${LABEL_ante}_${strip}_${polar}.raw.rsc ${LABEL_ante}_${strip}_${polar}_bw.slc.rsc
+	if ( $SPECTRAL_DIV == "yes" && $OVERLAP == "split" ) then
+		# # Update file length of each overlap SLC
+		# Forward
+		foreach SLCfile (`ls ${LABEL_ante}_${strip}_${polar}_ovl_???_fw.slc`)
+			set YSIZE=`(grep lines ${SLCfile}.aux.xml | awk 'BEGIN {FS=">"} {print $2}' | awk 'BEGIN {FS="<"} {print $1}')`
+			cp -f ${LABEL_ante}_${strip}_${polar}.slc.rsc ${SLCfile}.rsc
+			use_rsc.pl ${SLCfile}.rsc write FILE_LENGTH $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write YMAX $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write RLOOKS $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write ALOOKS $YSIZE
+			ln -sf $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile} $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}
+                        cp -f $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc
+		end
+		# Backward
+		foreach SLCfile (`ls ${LABEL_ante}_${strip}_${polar}_ovl_???_bw.slc`)
+			set YSIZE=`(grep lines ${SLCfile}.aux.xml | awk 'BEGIN {FS=">"} {print $2}' | awk 'BEGIN {FS="<"} {print $1}')`
+			cp -f ${LABEL_ante}_${strip}_${polar}.slc.rsc ${SLCfile}.rsc
+			use_rsc.pl ${SLCfile}.rsc write FILE_LENGTH $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write YMAX $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write RLOOKS $YSIZE
+			use_rsc.pl ${SLCfile}.rsc write ALOOKS $YSIZE
+                        ln -sf $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile} $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}
+                        cp -f $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc
+		end
+		# Overlap location
+		cp -f ${LABEL_ante}_${strip}_${polar}_Overlap.txt $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/
 	endif
+				
+	if ( $SPECTRAL_DIV == "yes" && $OVERLAP == "fill" ) then
+
+        # # extract forward-looking SLC and backward-looking SLC for later Spectral Diversity step
+
+		# forward looking geometry
+        	echo "OVERLAP                                  fw" >> $burst_comp_param_file_fw
+		@ scene = 1
+        	while ($scene <= $num_files_ante )
+                	set directory=$DIR_IMG_ante[$scene]
+                	echo $strip $directory
+
+                	echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	if ($scene == 1) then
+                        	echo " --skip_beg ${SKIP_BEG_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	else if ($scene == $num_files_ante) then
+                        	echo " --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	else
+                        	echo " --skip_beg 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                        	echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	endif
+                    echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                    echo " --split_overlap no "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	echo " --overlap_type Forward " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+			# if several input TIFF files are provided, append to end of output SLC file
+			if ($num_files_ante != 1) then
+                        	echo " --number_of_files $num_files_ante " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                	endif
+                	if ($scene != 1) then
+                        	echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+				# get number of bursts already written to file
+				set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_fw_Overlap.txt | awk '{print $1}'`
+				if (fileGlobalBurstIndex != "") then
+                                	echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+                                endif
+                	endif
+                	echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt
+			set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_fw.txt`
+			echo ""
+			echo " > > Command : " $ARGS_PYTHON 
+			echo ""
+
+			python $ARGS_PYTHON > ${LABEL_ante}_${strip}_${polar}_scene${scene}_log_deburst_zerolag_fw.txt
+
+			@ scene += 1
+		end
+
+		# Update rsc file
+		cp -f ${LABEL_ante}_${strip}_${polar}.raw.rsc ${LABEL_ante}_${strip}_${polar}_fw.slc.rsc
+
+		# Link new SLC  to OVL directory
+                set SLCfile=${LABEL_ante}_${strip}_${polar}_fw.slc
+                ln -sf $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile} $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}
+                cp -f $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc
+
+
+		# backward looking geometry
+        	echo "OVERLAP                                  bw" >> $burst_comp_param_file_bw
+        	@ scene = 1
+        	while ($scene <= $num_files_ante )
+                	set directory=$DIR_IMG_ante[$scene]
+                	echo $strip $directory
+
+                	echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	if ($scene == 1) then
+                        	echo " --skip_beg ${SKIP_BEG_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	else if ($scene == $num_files_ante) then
+                        	echo " --skip_end ${SKIP_END_ante} " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	else   
+                        	echo " --skip_end 0 " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	endif
+                    echo " --total_number_of_bursts $totalNumberOfBurstsAnte " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                    echo " --split_overlap no "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	echo " --overlap_type Backward " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+			# if several input TIFF files are provided, append to end of output SLC file
+			if ($num_files_ante != 1) then
+				echo " --number_of_files $num_files_ante " >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+			endif
+                	if ($scene != 1) then
+                        	echo " --file_order Append "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+				# get number of bursts already written to file
+				set fileGlobalBurstIndex=`tail -1 ${LABEL_ante}_${strip}_${polar}_bw_Overlap.txt | awk '{print $1}'`
+                                if (fileGlobalBurstIndex != "") then
+                                	echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                                endif
+			endif
+                	echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt
+                	set ARGS_PYTHON=`cat ${LABEL_ante}_${strip}_${polar}_scene${scene}_command_slc_zerolag_bw.txt`
+			echo ""
+                	echo " > > Command : " $ARGS_PYTHON
+			echo ""
+
+                	python $ARGS_PYTHON > ${LABEL_ante}_${strip}_${polar}_scene${scene}_log_deburst_zerolag_bw.txt
+
+                	@ scene += 1
+        	end
+
+                # Update rsc file
+		cp -f ${LABEL_ante}_${strip}_${polar}.raw.rsc ${LABEL_ante}_${strip}_${polar}_bw.slc.rsc
+
+                # Link new SLC  to OVL directory
+                set SLCfile=${LABEL_ante}_${strip}_${polar}_bw.slc
+		ln -sf $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile} $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}
+		cp -f $WORKINGDIR/SLC/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc $WORKINGDIR/OVL/${LABEL_ante}-${LABEL_post}_${strip}_${polar}/${SLCfile}.rsc
+
+	endif
+
+
 
 	# # Slave image   # #
             
@@ -725,29 +824,33 @@ while ( $count_strip <= $num_strips )
 		echo $strip $directory 
 		
                 echo " $dir/python/nsb_make_slc_s1.py --verbose --output-directory . --swath ${subswath} --polarization ${polar} " > ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-                #echo " --skip_beg ${SKIP_BEG_post} --skip_end ${SKIP_END_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 if ($scene == 1) then
                         echo " --skip_beg ${SKIP_BEG_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-                        #echo " --skip_end 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-                        echo " --total_number_of_bursts $totalNumberOfBurstsPost " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 else if ($scene == $num_files_post) then
-                        #echo " --skip_beg 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                         echo " --skip_end ${SKIP_END_post} " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 else   
                         echo " --skip_beg 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                         echo " --skip_end 0 " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 endif
+                echo " --total_number_of_bursts $totalNumberOfBurstsPost " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+                #echo " --split_overlap yes "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		# if several input TIFF files are provided, append to end of output SLC file
 		if ($num_files_post != 1) then
 			echo " --number_of_files $num_files_post " >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 		endif
-		if ($scene != 1) then
+		if ($scene == 1) then
+			# Set first burst number in slave image to fit with burst number of master image
+			set fileGlobalBurstIndex=`head -1 ${LABEL_ante}_${strip}_${polar}_Overlap.txt | awk '{print $1 - 2}'`
+			if (fileGlobalBurstIndex != "") then
+                      echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+            endif
+		else
                         echo " --file_order Append "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
 			# get number of bursts already written to file
 			set fileGlobalBurstIndex=`tail -1 ${LABEL_post}_${strip}_${polar}_Overlap.txt | awk '{print $1}'`
 			if (fileGlobalBurstIndex != "") then
-                               echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
-                        endif
+                      echo " --file_global_burst_index $fileGlobalBurstIndex "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
+            endif
 		endif
                 #echo " --incidence True "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
                 echo " $DIR_ARCHIVE/$directory "  >> ${LABEL_post}_${strip}_${polar}_scene${scene}_command_slc_zerolag.txt
@@ -760,7 +863,7 @@ while ( $count_strip <= $num_strips )
 
 	    @ scene += 1
 	end
-			
+	
 	# read file size information
 	set YSIZE=`(grep YMAX ${LABEL_post}_${strip}_${polar}.slc.aux.xml | awk 'BEGIN {FS=">"} {print $2}' | awk 'BEGIN {FS="<"} {print $1}')`
 

@@ -9,7 +9,7 @@
 ### Run ROI_PAC up to "begin_filt"
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
