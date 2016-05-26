@@ -1,7 +1,7 @@
 
 ####################################################
 ###   Sentinel-1 pre-processor for ROI_PAC
-###   Raphael Grandin (IPGP) -- April 2016
+###   Raphael Grandin (IPGP) -- May 2016
 ###   grandin@ipgp.fr
 ###   http://www.ipgp.fr/~grandin
 ####################################################
@@ -44,7 +44,7 @@ during the process.
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-DISCLOSER
+WARNING
 
 ROI_PAC is a copyrighted software that requires a license.
 Licenses are available at no charge for non-commercial use
@@ -102,7 +102,13 @@ SKIP_BEG_ante = (integer) skip this number of bursts at the top of first master 
 SKIP_END_ante = (integer) skip this number of bursts at the bottom of last master image
 SKIP_BEG_post = (integer) skip this number of bursts at the top of first slave image
 SKIP_END_post = (integer) skip this number of bursts at the bottom of last slave image
-
+DOWNLOAD_ORB  = (yes or no) do (yes) or skip (no) download of orbit files. Default: yes.
+SPECTRAL_DIV  = (yes or no) run (yes) or skip (no) spectral diversity. Default: yes.
+OVERLAP       = (split or fill) split: split overlap regions into distinct, small SLCs
+                                  (fast, but slightly less accurate)
+                                fill:  fill two large SLCs with either forward- or backward-
+                                  looking phase in overlap regions (slow, more accurate)
+                                Default: split
  
 Finally, the user copies the file named "S1-ROI_PAC_00_batch.sh" (located in directory "scripts")
 into his working directory. This script is run from command line, and takes the parameter
