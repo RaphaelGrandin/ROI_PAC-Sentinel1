@@ -1343,7 +1343,8 @@ write_overlap(FileNameOverlapOut,burstsList,overlapTopFirstLine,overlapTopLastLi
 
 # Write mean of kt for each burst
 FileNameKtmeanOut = os.path.join(outdir, prefix+"_ktMean.txt")
-burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+#burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+burstsList = range (fileGlobalBurstIndex + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd - skipBeg + 1)
 write_ktmean(FileNameKtmeanOut, burstsList, ktMean,fileOrder)
 
 # 6. Fill the metadata
