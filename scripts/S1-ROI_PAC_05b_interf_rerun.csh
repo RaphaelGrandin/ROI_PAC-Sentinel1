@@ -5,11 +5,11 @@
 ###   Raphael Grandin (IPGP)  -- April 2016
 ###   grandin@ipgp.fr
 ####################################################
-### STEP 5b (optional)
-### Re-run interferometric calculation
+### STEP 5
+### Run ROI_PAC up to "begin_filt"
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -130,21 +130,26 @@ endif
 
 set num_files_ante=$#DIR_IMG_ante
 set num_files_post=$#DIR_IMG_post
-if ( $num_files_ante != $num_files_post ) then
-        echo "Number of files for ante and post images must be the same ! Exit .."
-        exit
-else
-        set num_files=$num_files_ante
-endif
+#if ( $num_files_ante != $num_files_post ) then
+#        echo "Number of files for ante and post images must be the same ! Exit .."
+#        exit
+#else
+#        set num_files=$num_files_ante
+#endif
 
 echo "WORKINGDIR       "$WORKINGDIR
 echo "DIR_ARCHIVE      "$DIR_ARCHIVE
 #echo "ORBIT            "$orbit
 #echo "SCAN             "$scan
 @ scene = 1
-while ( $scene <= $num_files )
-        echo "DIR_IMG_"$scene " ; ante : " $DIR_IMG_ante[$scene] " / post : "  $DIR_IMG_post[$scene]
-        @ scene ++
+while ( $scene <= $num_files_ante )
+    echo "DIR_IMG_"$scene " ; ante : " $DIR_IMG_ante[$scene]
+    @ scene ++
+end
+@ scene = 1
+while ( $scene <= $num_files_post )
+    echo "DIR_IMG_"$scene " ; post : "  $DIR_IMG_post[$scene]
+    @ scene ++
 end
 
 set strip_list=""
@@ -188,31 +193,52 @@ while ( $count_strip <= $num_strips )
 		# # # Go to processing directory created at Step 2
 		cd $WORKINGDIR/INTERFERO/${LABEL_ante}-${LABEL_post}_${strip}_${polar}
 
-		# # # Re-run interferogram calculation
-	        cd INT
-#goto toto
-#exit
+		# normally this file should exist
+		if ( ! -e int.proc ) then
+			echo "File "int.proc" does not exist!"
+			echo "Something is wrong."
+			echo "Exit..."
+			exit
+		endif
 
-        	rm -fr ${LABEL_ante}-${LABEL_post}.int ${LABEL_ante}-${LABEL_post}.amp
-         	$INT_BIN/resamp_roi ${LABEL_ante}-${LABEL_post}_resamp.in > ${LABEL_ante}-${LABEL_post}_resamp.out
-         	rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int radar_HDR.unw
-         	rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int
-         	$INT_BIN/diffnsim diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
-#toto:
-		# multilook
-         	rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int
-         	look.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int $LOOKS_RANGE $LOOKS_AZIMUTH
-		rm -fr ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.amp
-		look.pl ${LABEL_ante}-${LABEL_post}.amp $LOOKS_RANGE $LOOKS_AZIMUTH
+                # # # Re-run interferogram calculation
+                cd INT
 
-                # re-calculate .cor
+                # normally these files should exist
+                if ( ! -e ${LABEL_ante}-${LABEL_post}.int ) then
+                        echo "Warning : File "${LABEL_ante}-${LABEL_post}.int" does not exist!"
+                endif
+                if ( ! -e ${LABEL_ante}-${LABEL_post}-sim_HDR.int ) then
+                        echo "Warning : File "${LABEL_ante}-${LABEL_post}-sim_HDR.int" does not exist!"
+                endif
+                if ( ! -e ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int ) then
+                        echo "Warning : File "${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int" does not exist!"
+                endif
+
+                # # # Re-calculate full resolution interferogram
+                rm -fr ${LABEL_ante}-${LABEL_post}.int ${LABEL_ante}-${LABEL_post}.amp
+                $INT_BIN/resamp_roi ${LABEL_ante}-${LABEL_post}_resamp.in > ${LABEL_ante}-${LABEL_post}_resamp.out
+
+                # # # Re-subtract simulation interferogram
+                rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int radar_HDR.unw
+                rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR.int
+                $INT_BIN/diffnsim diffnsim_${LABEL_ante}-${LABEL_post}-sim_HDR.int.in
+
+                # # # Re-do multilooking
+                rm -fr ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int
+                look.pl ${LABEL_ante}-${LABEL_post}-sim_HDR.int $LOOKS_RANGE $LOOKS_AZIMUTH
+                rm -fr ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.amp
+                look.pl ${LABEL_ante}-${LABEL_post}.amp $LOOKS_RANGE $LOOKS_AZIMUTH
+
+                # # # Re-calculate coherence
                 rm -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor
                 make_cor.pl ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks
-                # update resource files
+
+                # # # Update resource files
                 cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.int
-		cp -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.cor
-		cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.int.rsc
-		cp -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.cor.rsc
+                cp -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.cor
+                cp -f ${LABEL_ante}-${LABEL_post}-sim_HDR_${LOOKS_RANGE}rlks.int.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.int.rsc
+                cp -f ${LABEL_ante}-${LABEL_post}_${LOOKS_RANGE}rlks.cor.rsc ${LABEL_ante}-${LABEL_post}-sim_HDR_ORIG_${LOOKS_RANGE}rlks.cor.rsc
 
 		@ count_strip ++
 end
@@ -239,3 +265,4 @@ exit
 # #      along with "Sentinel-1 pre-processor for ROI_PAC".
 # # 	 If not, see <http://www.gnu.org/licenses/>.
 #
+

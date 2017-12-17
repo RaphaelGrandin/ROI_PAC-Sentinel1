@@ -25,12 +25,6 @@ import datetime, getopt, glob, os, sys, xml.etree.ElementTree
 
 import numpy as np
 
-#import gdal
-#from osgeo import gdal
-#from nsbas import gdal
-#drv = gdal.GetDriverByName("roi_pac")
-#drv = gdal.GetDriverByName("ENVI")
-
 import imp
 
 C = 299792458.0
@@ -236,9 +230,9 @@ def write_burst_interf_lag(FileNameLagInterfOut,burstsList,myLag,fileOrder):
 def write_overlap(FileNameOverlapOut,burstsList,overlapTopFirstLine,overlapTopLastLine,overlapBotLastLine,overlapFirstValidSample,overlapLastValidSample,fileOrder):
 	try:   
 		if fileOrder == 'Append':
-			fout = open(FileNameOverlapOut, 'a')
+			fout = open(FileNameOverlapOut, 'a') # append to existing file
 		else:
-			fout = open(FileNameOverlapOut, 'w')
+			fout = open(FileNameOverlapOut, 'w') # erase any existing file
 	except IOError, ioex:
         	print 'Error with',FileNameOverlapOut,':', os.strerror(ioex.errno)
     	else : 
@@ -248,7 +242,7 @@ def write_overlap(FileNameOverlapOut,burstsList,overlapTopFirstLine,overlapTopLa
         	fout.close()
 
 def read_overlap(FileNameOverlapIn):
-	burstsListPrev = []
+	overlapsListPrev = []
 	overlapTopFirstLinePrev = []
 	overlapTopLastLinePrev = []
 	overlapBotLastLinePrev = []
@@ -263,7 +257,7 @@ def read_overlap(FileNameOverlapIn):
 		for line in fin:
 			line = line.strip()
 			columns = line.split()
-			burstsListPrev.append(int(columns[0]))
+			overlapsListPrev.append(int(columns[0]))
 			overlapTopFirstLinePrev.append(int(columns[1]))
 			overlapTopLastLinePrev.append(int(columns[2]))
 			overlapBotLastLinePrev.append(int(columns[3]))
@@ -271,8 +265,8 @@ def read_overlap(FileNameOverlapIn):
 			overlapFirstValidSamplePrev.append(int(columns[4]))
 			overlapLastValidSamplePrev.append(int(columns[5]))
 		fin.close
-#	return burstsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, invalidLinesTopPrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev
-        return burstsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev
+#	return overlapsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, invalidLinesTopPrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev
+        return overlapsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev
 
 
 def write_ktmean(FileNameKtmeanOut,burstsList,ktMean,fileOrder):
@@ -344,6 +338,41 @@ def UTC2YYMMDD(timeUTC, timeRefYYMMDD):
 	myYYMMDD = datetime.datetime.strptime(myDateString+"T"+myTimeString,"%Y-%m-%dT%H:%M:%S.%f")
 	return myYYMMDD
 
+# Save SLC only in one overlap region
+def save_SLC_overlap(outFilePrefix, samples_in_output_file, dataArray, xOffset, yOffset):
+	# Output file name
+	outFileName = os.path.join(outdir, outFilePrefix+".slc")
+	# Get array size
+	myWidth  = dataArray.shape[1]
+	myLength = dataArray.shape[0]
+	# Display some info
+	if verbose:
+		print " > Writing to %s" % (outFileName)
+		print " >  Width = %d / Length = %d / xOffset = %d / yOffset = %d " % (myWidth, myLength, xOffset, yOffset)	
+	# Prepare output file
+	dst_ds_ovl = drv.Create(outFileName,
+		samples_in_output_file,
+		myLength,
+		1,
+		gdal.GDT_CFloat32)	        
+	dst_band_ovl = dst_ds_ovl.GetRasterBand(1)
+	dst_band_ovl.Fill(0, 0)	
+	# Save to SLC
+	print dataArray.shape
+	# If array too wide, crop it
+	if myWidth + xOffset > samples_in_output_file:
+		dataArray = dataArray[:,:int(samples_in_output_file-xOffset)]
+		print dataArray.shape
+		if verbose:
+			print (" > Warning : Overlap array is too wide (%d whereas image width is only %d). Array has been cropped.")  % (myWidth + xOffset, samples_in_output_file)
+	dst_band_ovl.WriteArray( dataArray, xOffset, yOffset)	
+	# Write metadata
+	dst_md_ovl = dst_ds_ovl.GetMetadata("ENVI")
+	dst_ds_ovl.SetMetadata(dst_md_ovl, "ENVI")	
+	# Close file
+	del dst_ds_ovl
+	del dst_md_ovl
+	
 
 # Check if module osgeo exists
 try:
@@ -385,7 +414,7 @@ drv = gdal.GetDriverByName("ENVI")
 outdir = ""
 verbose = False
 zeroLag = True
-opts, argv = getopt.getopt(sys.argv[1:], "", ["output-directory=", "swath=", "polarization=", "skip_beg=", "skip_end=", "azshift_mean=", "azshift_azimuth=", "azshift_range=", "overlap_type=", "number_of_files=", "file_order=", "file_global_burst_index=", "total_number_of_bursts=", "incidence=", "verbose", "help"])
+opts, argv = getopt.getopt(sys.argv[1:], "", ["output-directory=", "swath=", "polarization=", "skip_beg=", "skip_end=", "azshift_mean=", "azshift_azimuth=", "azshift_range=", "split_overlap=", "overlap_type=", "number_of_files=", "file_order=", "file_global_burst_index=", "total_number_of_bursts=", "incidence=", "verbose", "help"])
 for o, a in opts:
     if   o == "--output-directory":
         outdir = a
@@ -406,6 +435,8 @@ for o, a in opts:
     elif o == "--azshift_range":
 	azshiftRange = float(a)
 	zeroLag = False
+    elif o == "--split_overlap":
+	splitOverlap = a
     elif o == "--overlap_type":
 	overlapType = a
     elif o == "--number_of_files":
@@ -424,7 +455,7 @@ for o, a in opts:
         print("%s [--verbose] [--output-directory <out_dir>] [--swath <swath_no>] [--polarization <polarization>] \
 			[--skip_beg <skip_beg>] [--skip_end <skip_end>] \
 			[--azshift_mean <azshift_mean>] [--azshift_azimuth <azshift_azimuth>] [--azshift_range <azshift_range>] \
-			[--overlap_type <overlap_type>] \
+			[--write_overlap <write_overlap>] [--overlap_type <overlap_type>] \
 			[--number_of_files <number_of_files>] [--file_order <file_order>] \
                         [--total_number_of_bursts <total_number_of_bursts>] [--file_global_burst_index <file_global_burst_index>] \
 			[--incidence <incidence>] \
@@ -479,18 +510,64 @@ else:
 
 # 1c. Check if overlap instructions have been provided
 try:   
+        splitOverlap
+except:
+        splitOverlap = bool(False)
+        if verbose:
+            print "> A single SLC will be generated (default) : splitOverlap = '%s' " % (splitOverlap )
+else:
+    if splitOverlap == 'True' or splitOverlap == 'Yes' or splitOverlap == 'yes' or splitOverlap == 'YES' or splitOverlap == 'y' or splitOverlap == 'Y':
+        splitOverlap = bool(True)
+        if verbose:
+            print "> Overlaps will be split into several distinct SLCs : splitOverlap = '%s' " % (splitOverlap )
+    elif splitOverlap == 'False' or splitOverlap == 'No' or splitOverlap == 'no' or splitOverlap == 'NO' or splitOverlap == 'n' or splitOverlap == 'N':
+        splitOverlap = bool(False)
+        if verbose:
+            print "> A single SLC will be generated : splitOverlap = '%s' " % (splitOverlap )
+    else:
+        splitOverlap = bool(False)
+        print "> split_overlap option not recognized. Set to default. A single SLC will be generated (default) : splitOverlap = '%s' " % (splitOverlap )
+
+try:   
         overlapType
 except:
-        overlapType = 'None'
-        if verbose:
-            print "> Overlap type set to default : %s " % (overlapType )
+        if splitOverlap:
+			overlapType = 'Both'
+			if verbose:
+				print "> Both Forward and Backward overlaps will be written (default) : overlapType = '%s' " % (overlapType )
+        else:
+			overlapType = 'None'
+                        if verbose:
+                                print "> No overlap will be written : overlapType = '%s' " % (overlapType )
 else:
-    if overlapType == 'None' or overlapType == 'Forward' or overlapType == 'Backward':
-        if verbose:
-            print "> Overlap type : %s " % (overlapType )
-    else:
-        print "Overlap type not recognized. Set to 'None'."
-        overlapType = 'None'
+        if splitOverlap and  ( overlapType == 'Forward' or overlapType == 'Backward' ) :
+                if verbose:
+                        print "> Warning : splitOverlap='yes' incompatible with overlapType = '%s'." % (overlapType)
+                overlapType = 'Both' # splitOverlap=yes means that both overlaps are to be written
+                if verbose:
+                        print "> Both Forward and Backward overlaps will be written (default) : overlapType = '%s' " % (overlapType )
+        elif not(splitOverlap) and  ( overlapType == 'Both'  or overlapType == 'both') :
+                if verbose:
+                        print "> Warning : splitOverlap='no' incompatible with overlapType = '%s'"  % (overlapType )
+                splitOverlap = bool(False)
+                overlapType = 'None'
+                if verbose:
+                        print "> No overlap will be written : overlapType = '%s' " % (overlapType )
+        elif splitOverlap and  ( overlapType != 'Forward' and overlapType != 'Backward' ) :
+                overlapType = 'Both'
+                if verbose:
+                        print "> Both Forward and Backward overlaps will be written (default) : overlapType = '%s' " % (overlapType )
+        elif not(splitOverlap) and  ( overlapType == 'Forward' or overlapType == 'Backward' ) :
+                if verbose:
+                        print "> Overlap to be written : overlapType = '%s' " % (overlapType )
+        else:
+                if verbose:
+                        print "> Overlap type not recognized : '%s'" % (overlapType)
+                overlapType = 'None'
+                splitOverlap = bool(False)
+                if verbose:
+                        print "> Set to default : splitOverlap = '%s' " % (splitOverlap)
+                        print "> Set to default : overlapType = '%s' " % (overlapType )
     
 # 1d. Check if the data should be appenned (multiple files handling)
 try:
@@ -505,18 +582,25 @@ try:
         fileOrder
 except:
         fileOrder = 'None'
-	fileGlobalBurstIndex = 0
         if verbose:
-            print "> Creating new files. "
+            print "> Creating new file. "
+        factorShrinkSLC = 0.95 # typically, burst overlaps represent 10% of image size. Take safety margin.
+        #factorShrinkSLC = 1.00 # no shrinking
+        if verbose:
+            print "> SLC will be shrunk by a factor %f with respect to TIFF to account for overlap stitching. " % factorShrinkSLC
+        try:   
+            fileGlobalBurstIndex
+        except:
+            fileGlobalBurstIndex = 0
 else:
     if fileOrder == 'Append':
 
         if verbose:
             print "> Appending to existing files. "
         FileNameOverlapIn = os.path.join(outdir, prefix+"_Overlap.txt")
-#        (burstsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, invalidLinesTopPrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev) = read_overlap(FileNameOverlapIn)
-        (burstsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev) = read_overlap(FileNameOverlapIn)
-        print "burstsListPrev", burstsListPrev
+#        (overlapsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, invalidLinesTopPrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev) = read_overlap(FileNameOverlapIn)
+        (overlapsListPrev, overlapTopFirstLinePrev, overlapTopLastLinePrev, overlapBotLastLinePrev, overlapFirstValidSamplePrev, overlapLastValidSamplePrev) = read_overlap(FileNameOverlapIn)
+        print "overlapsListPrev", overlapsListPrev
         print "overlapTopFirstLinePrev", overlapTopFirstLinePrev
         print "overlapTopLastLinePrev", overlapTopLastLinePrev
         print "overlapBotLastLinePrev", overlapBotLastLinePrev
@@ -528,11 +612,9 @@ else:
                 fileGlobalBurstIndex
         except:
 		# last burst in list of bursts in "Overlap" file
-                fileGlobalBurstIndex = burstsListPrev[ len(burstsListPrev) - 1 ]
-        if verbose:
-            print "> Global burst index: %d" % (fileGlobalBurstIndex)
+                fileGlobalBurstIndex = overlapsListPrev[ len(overlapsListPrev) - 1 ]
 	# last burst in list of bursts in "Overlap" file
-	indexLastOverlapPrevFile = burstsListPrev.index(fileGlobalBurstIndex)
+	indexLastOverlapPrevFile = overlapsListPrev.index(fileGlobalBurstIndex)
         if verbose:
             print "> Index last overlap: %d" % (indexLastOverlapPrevFile)
 	filePreviousYlastLine = overlapBotLastLinePrev[indexLastOverlapPrevFile]
@@ -549,6 +631,8 @@ else:
         print "Overlap type not recognized. Creating new files."
         fileOrder = 'None'
 	fileGlobalBurstIndex = 0
+if verbose:
+    print "> Starting global burst numbering from %d. " % ( fileGlobalBurstIndex )
 
 # 1e. Write incidence angles?
 try:   
@@ -567,6 +651,10 @@ else:
 overlapTopFirstLine = []
 overlapTopLastLine = []
 overlapBotLastLine = []
+overlapTopFirstLine_curr = []
+overlapTopLastLine_curr = []
+overlapBotLastLine_curr = []
+numLinesKeepBottom = int(150) # number of lines at bottom of bursts to account for overlap (should be greater than the length of longest possible overlap region)
 overlapFirstValidSample = []
 overlapLastValidSample = []
 #invalidLinesTop = []
@@ -579,8 +667,6 @@ elif overlapType == 'Backward':
         prefix = prefix + '_bw'
 if verbose:
         print 'prefix:', prefix
-
-
 
 # 2.a Read the state vectors
 if verbose:
@@ -785,11 +871,14 @@ if fileOrder != 'Append':
 	dst_ds = drv.Create(os.path.join(outdir, prefix+".slc"),
                     samples_per_burst,
                     #lines_per_burst*numOfBursts*numberOfFiles,
-                    lines_per_burst*totalNumberOfBursts,
+                    #lines_per_burst*totalNumberOfBursts,
+                    int(lines_per_burst*totalNumberOfBursts*factorShrinkSLC),
                     1,
                     gdal.GDT_CFloat32)
 	dst_band = dst_ds.GetRasterBand(1)
 	dst_band.Fill(0, 0)
+        if verbose:
+           print (" > File size %d x %d ") % (samples_per_burst, int(lines_per_burst*totalNumberOfBursts*factorShrinkSLC))
 	#if WriteIncidence:
 		#inc_ds = drv.Create(os.path.join(outdir, prefix+".inc"),
 	        #            samples_per_burst,
@@ -827,6 +916,8 @@ else:
                 #squ_band = inc_ds.GetRasterBand(2)
 
 # 5. Read the bursts
+
+# index of first line in TIFF relative to first line in SLC 
 if fileOrder == 'Append':
 	#dst_yoff = fileGlobalBurstIndex
 	dst_yoff = firstLineIndexDiff
@@ -836,7 +927,9 @@ if fileOrder == 'Append':
 else:
 	dst_yoff = 0 # TODO: Include the swath offet (use GCP?)
 
+# add number of invalid lines in first burst found in TIFF
 for j in range(burst_info[0][3].size):
+    # if firstValidSample = -1, this is an invalid line
     if burst_info[0][3][j] == -1:
         dst_yoff = dst_yoff+1
     else:
@@ -844,32 +937,45 @@ for j in range(burst_info[0][3].size):
 if verbose:
     print "> dst_yoff %d" % dst_yoff
 
+# alternatively, add  number of invalid lines in first USED burst found in TIFF
 if fileOrder == 'Append':
     for j in range(burst_info[skipBeg][3].size):
+        # if firstValidSample = -1, this is an invalid line
         if burst_info[skipBeg][3][j] == -1:
             dst_yoff2 = dst_yoff2+1
         else:
             break
     if verbose:
         print "> dst_yoff2 %d" % dst_yoff2
+    # normally, should yield the same results, as fileOrder == 'Append' => skipBeg = 0
+    if dst_yoff != dst_yoff2:
+        print (" > Warning : dst_yoff (%d) is different from dst_yoff2 (%d)! Should be equal.") % (dst_yoff, dst_yoff2)
 
-
-
-#for i in range(skipBeg,len(burst_info)-skipEnd):
+# Loop over all bursts in TIFF
 for i in range(len(burst_info)):
     bi = burst_info[i]
     afr = azimuth_fm_rate[i]
     dcg = doppler_centroid_geometry[i]
-    
+
+    # Index of burst (local = relative to first burst found in current image)
+    iLocal = i + 1
+
+    # Index of burst (global = relative to first burst used in master image)    
+    iGlobal = fileGlobalBurstIndex+1+i-skipBeg
+
     if verbose:
-        print "Processing burst %d" % (i + 1)
+        print ""
+        print "   > Processing burst %d" % (iLocal)
+        print "   > Global burst index = %d" % (iGlobal)
         
     #print 'bi', bi 
     #print 'afr', afr 
     #print 'dcg', dcg 
 
+    # first valid line in current burst
     dst_yoff3 = 0
     for j in range(bi[3].size):
+        # if firstValidSample = -1, this is an invalid line
         if bi[3][j] == -1:
             dst_yoff3 = dst_yoff3+1
         else:
@@ -879,6 +985,7 @@ for i in range(len(burst_info)):
 
     # Find the coordinates of the burst, discarding invalid lines/samples
     #xoff, yoff = int(bi[2]%src_ds.RasterXSize/4), int(bi[2]/src_ds.RasterXSize/4)
+    # offset relative to beginning of TIFF
     xoff, yoff = int((bi[2]-tiffOffset)%src_ds.RasterXSize/4), int((bi[2]-tiffOffset)/src_ds.RasterXSize/4)
     xoff2, yoff2 = 0, 0
     xsize, ysize = 0, 0
@@ -886,24 +993,42 @@ for i in range(len(burst_info)):
     fvsMax = 0
     lvsMin = samples_per_burst
     for j in range(bi[3].size):
+        # first / last valid samples
         fvs, lvs = bi[3][j], bi[4][j]
         if fvs == -1 and lvs == -1 and before_fvl:
+            # invalid lines at the top
             yoff2 = yoff2 + 1
         elif fvs != -1 and lvs != -1:
             if before_fvl:
+                # reached first valid line
                 before_fvl =  False
+                # invalid samples in near range
                 xoff2 = fvs
                 xsize = lvs - xoff - xoff2
                 ysize = 1
             else:
+                # next valid line
                 ysize = ysize + 1
             if fvs > fvsMax:
 				fvsMax = fvs
             if lvs < lvsMin:
 				lvsMin = lvs
         elif fvs == -1 and lvs == -1 and not before_fvl:
+            # reached just after last valid line
             break # Nothing else to do?
-    
+
+    # save write offsets from previous burst, if applicable
+    if ( i > 0 ):
+        xOffsetWritePrev = xOffsetWrite
+        yOffsetWritePrev = yOffsetWrite
+
+    # X offset when writing to output file
+    xOffsetWrite = xoff + xoff2
+    # Y offset when writing to output file
+    yOffsetWrite = yoff + yoff2
+    if verbose:
+        print ("xOffsetWrite %d / yOffsetWrite %d ") % (xOffsetWrite, yOffsetWrite)
+
     # Only deal with the requested bursts
     if ( (i >= skipBeg) and (i < len(burst_info) - skipEnd)) :
 		            
@@ -915,11 +1040,11 @@ for i in range(len(burst_info)):
 				# We have to compare against first / last valid samples from last burst of previous file
 				overlapFirstValidSample = np.append(overlapFirstValidSample, np.max([filePreviousFVS, fvsMax]))
 				overlapLastValidSample =  np.append(overlapLastValidSample,  np.min([filePreviousLVS, lvsMin]))
-        else: # This is not the first burst, just compare with previous burs
+        else: # This is not the first burst, just compare with previous burst
 			overlapFirstValidSample = np.append(overlapFirstValidSample, np.max([overlapFirstValidSamplePrev,fvsMax]))
 			overlapLastValidSample =  np.append(overlapLastValidSample,  np.min([overlapLastValidSamplePrev, lvsMin]))
 		
-        # Save first / last valid samples from current burst to compare with next burst
+        # Save first / last valid samples from current burst to compare with next burst, if applicable
         overlapFirstValidSamplePrev = fvsMax
         overlapLastValidSamplePrev =  lvsMin
         if verbose:
@@ -934,7 +1059,7 @@ for i in range(len(burst_info)):
             print 'xsize %d / ysize %d' % (xsize, ysize)
             #print 'samples_per_burst %d' % (samples_per_burst)
         #data = src_band.ReadAsArray(int(xoff+xoff2-tiffOffsetX), int(yoff+yoff2-tiffOffsetY), int(xsize), int(ysize))
-        data = src_band.ReadAsArray(int(xoff+xoff2), int(yoff+yoff2), int(xsize), int(ysize))
+        data = src_band.ReadAsArray(int(xOffsetWrite), int(yOffsetWrite), int(xsize), int(ysize))
     
         # Compute deramping function
         # - zero-doplper azimuth time centered in the middle of the burst
@@ -994,35 +1119,39 @@ for i in range(len(burst_info)):
 		    print ' forward,  far-range: tau %.6f / eta %+.6f / squintDegree %+.6f / incidenceDegree %.6f' % (tau[-1],      eta[-1,-1],   squintDegree[-1,-1],   incidenceDegree[-1,-1])
 
 	# Count from beginning
+        # first USED burst
         if i == skipBeg:
 			if fileOrder != 'Append': # first image : just write to output
-				#yoff3 = dst_yoff
                                 yoff3 = dst_yoff3
-				# No overlap
+				# No overlap need to be taken into account at the top
 				yoff4 = 0
-			else: # not the first image : need to handle overlap with last burst in previous image
+                                yoff5 = 0
+			else: # not the first image : need to account for overlap with last burst in previous image
                                 #yoff3 = dst_yoff + yoff2 - filePreviousYOff2 + 1
-                                yoff3 = dst_yoff 
+                                yoff3 = dst_yoff
                                 #print "yoff2 - filePreviousYOff2", yoff2 - filePreviousYOff2
+				# Length of top overlap
+                                yoff5 = filePreviousYlastLine - dst_yoff
 				#yoff3 = dst_yoff - 1 # for test
 				# Overlap
-				if overlapType == 'None':
-					yoff4 = int( ( filePreviousYlastLine - dst_yoff ) / 2)
+				if overlapType == 'None' or overlapType == 'Both':
+					yoff4 = int( ( yoff5 ) / 2)
 				elif overlapType == 'Backward':				
 					yoff4 = 0
 				elif overlapType == 'Forward':				
-					yoff4 = int( filePreviousYlastLine - dst_yoff )
+					yoff4 = int( yoff5 )
                                 # number of invalid lines at top of current burst
                                 #invalidLinesTop  = np.append ( invalidLinesTop , yoff2 )
         else:  
 			yoff3 = yoff3 + int(linesBetweenBurstTop[i]) + yoff2 - yoff2_prev
-			# Overlap
-			if overlapType == 'None':
-				yoff4 = int( (ysize-linesBetweenBurstTop[i]) / 2)
+			# Length of top overlap
+                        yoff5 = ysize-linesBetweenBurstTop[i]
+			if overlapType == 'None' or overlapType == 'Both':
+				yoff4 = int( ( yoff5 ) / 2)
 			elif overlapType == 'Backward':
 				yoff4 = 0
 			elif overlapType == 'Forward':
-				yoff4 = int(ysize-linesBetweenBurstTop[i])
+				yoff4 = int( yoff5 )
 			# number of invalid lines at top of current burst
                         #invalidLinesTop  = np.append ( invalidLinesTop , yoff2 )
 	
@@ -1030,14 +1159,17 @@ for i in range(len(burst_info)):
 
         if i != skipBeg  or fileOrder== 'Append': # except for first burst of first image (no overlap) :
 			# first line in overlap at top of current burst
-			overlapTopFirstLine = np.append ( overlapTopFirstLine , int(yoff3-1) )
+                        overlapTopFirstLine_curr = int(yoff3-1)
+                        overlapTopFirstLine = np.append ( overlapTopFirstLine , overlapTopFirstLine_curr )
 			# last line in overlap at top of current burst
 			if i == skipBeg: # use value from previous file
-				overlapTopLastLine = np.append ( overlapTopLastLine , filePreviousYlastLine )
+                                overlapTopLastLine_curr = filePreviousYlastLine
 			else:
-				overlapTopLastLine  = np.append ( overlapTopLastLine , int(yoff3-1+int(ysize-linesBetweenBurstTop[i])) )
+                                overlapTopLastLine_curr = int(yoff3-1+int(ysize-linesBetweenBurstTop[i]))
+                        overlapTopLastLine  = np.append ( overlapTopLastLine , overlapTopLastLine_curr )
 			# last line in overlap at bottom of current burst
-			overlapBotLastLine  = np.append ( overlapBotLastLine , int(yoff3-1+int(ysize)) )
+                        overlapBotLastLine_curr = int(yoff3-1+int(ysize))
+                        overlapBotLastLine  = np.append ( overlapBotLastLine , overlapBotLastLine_curr)
 			
 		## first line in overlap at top of current burst
 		#overlapTopFirstLine = np.append ( overlapTopFirstLine , int(yoff3-1) )
@@ -1047,14 +1179,14 @@ for i in range(len(burst_info)):
 		#overlapBotLastLine  = np.append ( overlapBotLastLine , int(yoff3-1+int(ysize)) )
 		                        
         if verbose:
-			print 'overlapTopFirstLine %s / overlapTopLastLine %s / overlapBotLastLine %s' % (overlapTopFirstLine, overlapTopLastLine, overlapBotLastLine)
+			print 'overlapTopFirstLine %s / overlapTopLastLine %s / overlapBotLastLine %s' % (overlapTopFirstLine_curr, overlapTopLastLine_curr, overlapBotLastLine_curr)
 
 	#print "check: ", ysize, yoff, yoff2, yoff3, yoff4, dst_yoff, int(linesBetweenBurstTop[i]), ysize-int(linesBetweenBurstTop[i]), linesBetweenBurstTop
         if verbose:
                 print "check : ysize %d / yoff %d / yoff2 %d / yoff3 %d / yoff4 %d / dst_yoff %d" % (ysize, yoff , yoff2, yoff3, yoff4, dst_yoff)
 	if verbose:
-		print 'FirstValidSampleInBurst   : %d     /  LastValidSampleInBurst   : %d' % (yoff2, ysize+yoff2)
-		print 'FirstValidLineInBurst     : %d     /  LastValidLineInBurst     : %d' % (fvsMax, lvsMin)
+		print 'FirstValidLineInBurst   : %d     /  LastValidLineInBurst   : %d' % (yoff2, ysize+yoff2)
+		print 'FirstValidSampleInBurst : %d     /  LastValidSampleInBurst : %d' % (fvsMax, lvsMin)
 
         # Account for user-provided lag, if necessary
 	if zeroLag == True: # no lag, use burst centre time for compensation
@@ -1063,8 +1195,9 @@ for i in range(len(burst_info)):
     	else: # use lag provided by user
                 if verbose:
                     print "indexLag", indexLag
-                    print "fileGlobalBurstIndex", fileGlobalBurstIndex, "i", i
-                indexLagCurrentBurst = indexLag.index(fileGlobalBurstIndex+1+i)
+                    #print "fileGlobalBurstIndex", fileGlobalBurstIndex, "i", i
+                #indexLagCurrentBurst = indexLag.index(fileGlobalBurstIndex+1+i)
+                indexLagCurrentBurst = indexLag.index(iGlobal)
 		myLagCurrentBurst = myLag[indexLagCurrentBurst]
                 if verbose:
 		    print 'indexLagCurrentBurst', indexLagCurrentBurst, 'myLagCurrentBurst', myLagCurrentBurst
@@ -1095,29 +1228,95 @@ for i in range(len(burst_info)):
         # Apply deramping function
         data = data * phi
 
-	# Crop burst at the top in the overlap area
-	data = np.delete(data, range(yoff4), axis=0)
-	if WriteIncidence:
+#        if splitOverlap and ( overlapType == 'Backward' or overlapType == 'Both' ):
+#            # Keep only top of burst
+#            data_ovl_bw = data[:int(yoff5),:].copy()
+
+        #if splitOverlap and ( overlapType == 'Forward' or overlapType == 'Both' ):
+        #    # Keep "numLinesKeepBottom" lines at bottom of burst
+        #    data_ovl_fw = data[ysize-int(numLinesKeepBottom):,:].copy()
+               
+        if ( i != skipBeg or fileOrder== 'Append' ) and splitOverlap: # except for first burst of first image (no overlap) :
+            # Number of lines in overlap at the top of current burst
+            overlapTopNumberOfLines = int(overlapTopLastLine_curr - overlapTopFirstLine_curr)
+            if verbose:
+                     print " overlapTopNumberOfLines = ", overlapTopNumberOfLines
+            # Number of lines in overlap at the top of current burst
+            overlapBotNumberOfLines = overlapTopNumberOfLines # TODO : use Master file to determine size of bottom overlap
+            if verbose:
+                    print " overlapBotNumberOfLines = ", overlapBotNumberOfLines
+
+        # # Write backward looking phase in overlap region at the top of CURRENT burst
+        if ( i != skipBeg or fileOrder== 'Append' ) and splitOverlap: # except for first burst of first image (no overlap) :
+ 			
+			# # Write Backward overlap region of current burst
+ 			if overlapType == 'Backward' or overlapType == 'Both':
+				# Base name
+			    prefix_ovl_bw = ( prefix + '_ovl_' + '%03d' + '_bw' ) % (iGlobal )
+			    if verbose:
+					print "Backward SLC : ", prefix_ovl_bw
+			    # Keep only top of burst
+			    data_ovl_bw = data[:int(yoff5),:].copy()
+			    # Save to SLC
+			    save_SLC_overlap(prefix_ovl_bw, samples_per_burst, data_ovl_bw, int(xOffsetWrite), int(0))
+
+        # # Write forward looking phase in overlap region at the bottom of PREVIOUS burst
+        if ( i != skipBeg or ( fileOrder== 'Append' and i != 0 ) ) and splitOverlap: # except for first burst of image (no overlap) :
+			# # Write Forward overlap region of previous burst
+ 			if overlapType == 'Forward' or overlapType == 'Both':
+				# Base name
+			    prefix_ovl_fw = ( prefix + '_ovl_' + '%03d' + '_fw' ) % (iGlobal )
+			    if verbose:
+				    print "Forward SLC : ", prefix_ovl_fw
+			    # Keep only bottom of burst
+			    data_ovl_fw = np.delete(data_ovl_fw, range(int(numLinesKeepBottom-yoff5)), axis=0)
+			    # Save to SLC
+			    save_SLC_overlap(prefix_ovl_fw, samples_per_burst, data_ovl_fw, int(xOffsetWritePrev), int(0))
+
+        # # Save bottom of CURRENT burst
+        if splitOverlap and ( overlapType == 'Forward' or overlapType == 'Both' ):
+            # Keep "numLinesKeepBottom" lines at bottom of burst
+            data_ovl_fw = data[ysize-int(numLinesKeepBottom):,:].copy()
+
+        # # Also write forward looking phase in overlap region at the bottom of CURRENT burst
+        # # if bottom of image has been reached
+        if ( ( i == len(burst_info) - skipEnd - 1 ) and ( iGlobal != totalNumberOfBursts )  ) : # only last burst of not last image 
+			# # Write Forward overlap region of curent burst
+ 			if overlapType == 'Forward' or overlapType == 'Both':
+			    # Base name, anticipate
+			    prefix_ovl_fw = ( prefix + '_ovl_' + '%03d' + '_fw' ) % (iGlobal + 1 )
+			    if verbose:
+			        print "Forward SLC : ", prefix_ovl_fw
+			    # Keep only bottom of burst
+			    data_ovl_fw = np.delete(data_ovl_fw, range(int(numLinesKeepBottom-yoff5)), axis=0)
+			    # Save to SLC
+			    save_SLC_overlap(prefix_ovl_fw, samples_per_burst, data_ovl_fw, int(xOffsetWrite), int(0))
+
+        # Crop burst at the top in the overlap area
+        data = np.delete(data, range(yoff4), axis=0)
+        if WriteIncidence:
                 incidenceDegree  = np.delete(incidenceDegree, range(yoff4), axis=0)
                 squintDegree     = np.delete(squintDegree,    range(yoff4), axis=0)
 
-		
         # Write out the burst
         print " Writing burst %d" % (i + 1)
 #        dst_band.WriteArray(data, int(xoff+xoff2), int(yoff3-1))
-        dst_band.WriteArray(data, int(xoff+xoff2), int(yoff3-1+yoff4))
+#        print data.shape
+#        print int(xoff+xoff2), int(yoff3-1+yoff4)
+#        print samples_per_burst
+        dst_band.WriteArray(data, int(xOffsetWrite), int(yoff3-1+yoff4))
         #if WriteIncidence:
                         #inc_band.WriteArray(incidenceDegree, int(xoff+xoff2), int(yoff3-1+yoff4))
 			#squ_band.WriteArray(squintDegree, int(xoff+xoff2), int(yoff3-1+yoff4))
 
     else:
         print " Skipping burst %d" % (i + 1)
-     
 
 #5.b If user did not pass information on azimuth shift, write "LagOutDop" output file
 if zeroLag == True:
         FileNameLagInterfOut = os.path.join(outdir, prefix+"_LagOutDop.txt")
-	burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+	#burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+        burstsList = range (fileGlobalBurstIndex + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd - skipBeg + 1)
 	#print 'burstsList %s' % burstsList
 	#print 'myLag %s' % myLag
         write_burst_interf_lag(FileNameLagInterfOut, burstsList, myLag,fileOrder)
@@ -1129,19 +1328,23 @@ if zeroLag == True:
 #if overlapType == 'None' :
 FileNameOverlapOut = os.path.join(outdir, prefix+"_Overlap.txt")
 if fileOrder != 'Append':
-	burstsList = range (fileGlobalBurstIndex + skipBeg + 2, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+#	burstsList = range (fileGlobalBurstIndex + skipBeg + 2, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+	burstsList = range (fileGlobalBurstIndex + 2, fileGlobalBurstIndex + len(burst_info) - skipEnd - skipBeg + 1)
 else:
-	burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1 )
-#print 'burstsList %s' % burstsList
-#print 'fileGlobalBurstIndex %s / skipBeg %s / len(burst_info) %s / skipEnd %s' % (fileGlobalBurstIndex, skipBeg, len(burst_info), skipEnd)
-#print 'overlapTopFirstLine %s' % overlapTopFirstLine
+#	burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1 )
+	burstsList = range (fileGlobalBurstIndex + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd - skipBeg + 1)
+if verbose:
+	print 'burstsList %s' % burstsList
+	print 'fileGlobalBurstIndex %s / skipBeg %s / len(burst_info) %s / skipEnd %s' % (fileGlobalBurstIndex, skipBeg, len(burst_info), skipEnd)
+	print 'overlapTopFirstLine %s' % overlapTopFirstLine
 #write_overlap(FileNameOverlapOut,burstsList,overlapTopFirstLine,overlapTopLastLine,overlapBotLastLine,invalidLinesTop,overlapFirstValidSample,overlapLastValidSample,fileOrder)
 write_overlap(FileNameOverlapOut,burstsList,overlapTopFirstLine,overlapTopLastLine,overlapBotLastLine,overlapFirstValidSample,overlapLastValidSample,fileOrder)
 
 
 # Write mean of kt for each burst
 FileNameKtmeanOut = os.path.join(outdir, prefix+"_ktMean.txt")
-burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+#burstsList = range (fileGlobalBurstIndex + skipBeg + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd + 1)
+burstsList = range (fileGlobalBurstIndex + 1, fileGlobalBurstIndex + len(burst_info) - skipEnd - skipBeg + 1)
 write_ktmean(FileNameKtmeanOut, burstsList, ktMean,fileOrder)
 
 # 6. Fill the metadata

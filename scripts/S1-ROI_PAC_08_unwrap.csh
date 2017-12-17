@@ -9,6 +9,7 @@
 ### Run ROI_PAC up to "unwrapped"
 ####################################################
 
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #

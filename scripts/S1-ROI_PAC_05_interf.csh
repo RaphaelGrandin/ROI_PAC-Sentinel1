@@ -9,7 +9,7 @@
 ### Run ROI_PAC up to "begin_filt"
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -221,7 +221,7 @@ while ( $count_strip <= $num_strips )
         	set ampcor_file=`(ls ????????-????????_ampcor.off)`
         	set cull_file=`(ls ????????-????????_cull.off)`
         	# re-do the culling
-        	$INT_BIN/fitoff $ampcor_file $cull_file 1.5 0.3 1.5 > fitoff_ampcor.out
+        	$INT_BIN/fitoff $ampcor_file $cull_file 1.5 0.3 50 > fitoff_ampcor.out
         	cd ..
         	# finish the job
         	process_2pass.pl int.proc slcs offsets >>& log_process2pass_${LABEL_ante}-${LABEL_post}_${strip}_${polar}.txt

@@ -10,6 +10,7 @@
 ### Run ROI_PAC up to "done"
 ####################################################
 
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #

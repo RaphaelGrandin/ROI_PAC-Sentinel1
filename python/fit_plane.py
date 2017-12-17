@@ -14,10 +14,14 @@
 import sys,os
 import array
 import numpy
-import matplotlib.pyplot as plt
 import cmath as cm
 import mpmath
 from colorsys import hls_to_rgb
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 # # # # # # # # # # # # # #
 # # Define a few variables
@@ -104,6 +108,18 @@ width = int(args[1])
 length = int(args[2])
 SpectralOverlapInputFile = args[3]
 OverlapIndexInputFile = args[4]
+try:
+    split_overlap = args[5]
+except:
+    split_overlap = bool(False)
+    print " > Assuming double-difference interferogram comes in a single interferogram. "
+else:
+    if split_overlap == 'True' or split_overlap == 'Yes' or split_overlap == 'yes' or split_overlap == 'Y' or split_overlap == 'y' or split_overlap == 'YES' or split_overlap == 'split':
+        split_overlap = bool(True)
+        print " > Assuming double-difference interferograms are split into distinct interferograms. "
+    else:
+        split_overlap = bool(False)
+        print " > Assuming double-difference interferogram comes in a single interferogram. "
 
 # # # # # # # # # # # # # #
 # define output file names
@@ -111,10 +127,6 @@ outputRoot=os.path.splitext(os.path.basename(OverlapIndexInputFile))[0]
 outputDir=os.path.dirname(OverlapIndexInputFile)
 outputFigureFileName=os.path.join(outputDir,outputRoot+'_sdFit.pdf')
 outputFitFileName=os.path.join(outputDir,outputRoot+'_sdFit.rsc')
-
-# # # # # # # # # # # # # #
-# # Read the interferogram
-myCpxArray=read_complex_array2(SpectralOverlapInputFile,width,length)
 
 # # # # # # # # # # # # # #
 # # Read start/stop line indexes of overlap regions
@@ -129,16 +141,46 @@ f.close()
 #overlapLength=numpy.mean(numpy.diff(ovlList))
 
 # # # # # # # # # # # # # #
-# # Restrict the analysis to the overlap regions
+# # List of overlaps
+numberOfOverlaps = len(ovlList[0])
+overlapFirst = int(ovlList[0][0])
+overlapLast  = int(ovlList[numberOfOverlaps][0])
+print "numberOfOverlaps = ",numberOfOverlaps
+print " overlapFirst = ",overlapFirst
+print " overlapLast = ",overlapLast
+
+if split_overlap:
+    # # # # # # # # # # # # # #
+    # # Input file names for later reading of Xints
+    inputXintFileNameRoot=os.path.splitext(os.path.basename(SpectralOverlapInputFile))[0]
+    inputIntFileName=str(inputXintFileNameRoot).split("_")[0]
+    inputLooks=str(inputXintFileNameRoot).split("_")[-1]
+    inputXintDir=os.path.dirname(SpectralOverlapInputFile)
+else:
+    # # # # # # # # # # # # # #
+    # # Read the whole Xint interferogram
+    myCpxArray=read_complex_array2(SpectralOverlapInputFile,width,length)
+
+
+# # # # # # # # # # # # # #
+# # Loop over overlap regions
 myCpxArrayOvl = numpy.array([], dtype=int).reshape(-1,width)
 myCpxArrayXCoord = numpy.array([], dtype=int).reshape(-1,width)
 myCpxArrayYCoord = numpy.array([], dtype=int).reshape(-1,width)
 for Noverlap in range(len(ovlList)):
+    # Burst index
     burstNum=int(ovlList[Noverlap][0])
+
+    # Length of overlap region
+    heightOverlap = int( (float(ovlList[Noverlap][2]) - float(ovlList[Noverlap][1])) //nLooksAz )
+
+    # Top index
     indexTop=int(round(float(ovlList[Noverlap][1])/nLooksAz))
-    indexBot=int(round(float(ovlList[Noverlap][2])/nLooksAz))
-    # Noverlap][3] not used
-    
+
+    # Bottom index
+    #indexBot=int(round(float(ovlList[Noverlap][2])/nLooksAz)) # Bad roundoff
+    indexBot=int(indexTop+heightOverlap)
+
     ## Find with zeros the invalid values to the left and to the right of overlap region
     #myCpxArrayOvl = numpy.vstack((myCpxArrayOvl,myCpxArray[indexTop:indexBot,0:width
     indexLeft=int(round(float(ovlList[Noverlap][4])/nLooksRa))
@@ -146,21 +188,45 @@ for Noverlap in range(len(ovlList)):
     # the above seems to yield bad left / right indexes... abandon
     indexLeft=int(0)
     indexRight=int(width)
-    print burstNum, indexTop, indexBot, indexLeft, indexRight
-    heightOverlap = indexBot - indexTop
+
+    # Display to screen (debug)
+    print ""
+    print burstNum, indexTop, indexBot, indexLeft, indexRight, heightOverlap
+
+    # Zero-filled arrays to replace bad columns in near / range
     tmpCpxArrayOvlLeft = numpy.zeros((heightOverlap,indexLeft), dtype=complex)
     tmpCpxArrayOvlRight = numpy.zeros((heightOverlap,width-indexRight), dtype=complex)
-    
-    # Forget about the rest of the interferogram (should be zero everywhere)
-    myCpxArrayOvl = numpy.vstack((myCpxArrayOvl,numpy.hstack((tmpCpxArrayOvlLeft,myCpxArray[indexTop:indexBot,indexLeft:indexRight],tmpCpxArrayOvlRight))))
-    
-    tmpArray=numpy.mgrid[indexTop:indexBot,0:width]    
+
+    if split_overlap:
+        # Xint file name
+        prefix_ovl = ( inputIntFileName + '_ovl_' + '%03d' + '_xint_' + inputLooks ) % ( burstNum )
+        input_ovl = os.path.join(inputXintDir,prefix_ovl+'.int')
+        print input_ovl
+
+        # Read current Xint
+        myCpxArray = read_complex_array2(input_ovl,width,heightOverlap)
+
+        # Append it at the bottom and fill with zeros at left / right
+        myCpxArrayOvl = numpy.vstack((myCpxArrayOvl,numpy.hstack((tmpCpxArrayOvlLeft,myCpxArray[:,indexLeft:indexRight],tmpCpxArrayOvlRight))))
+
+        # Cleanup
+        del myCpxArray
+
+    else:
+        # Forget about the rest of the interferogram (should be zero everywhere)
+        myCpxArrayOvl = numpy.vstack((myCpxArrayOvl,numpy.hstack((tmpCpxArrayOvlLeft,myCpxArray[indexTop:indexBot,indexLeft:indexRight],tmpCpxArrayOvlRight))))
+
+
+    # Grids with X and Y coordinates
+    tmpArray=numpy.mgrid[indexTop:indexBot,0:width]
     myCpxArrayXCoord=numpy.vstack((myCpxArrayXCoord,tmpArray[1]))
     myCpxArrayYCoord=numpy.vstack((myCpxArrayYCoord,tmpArray[0]))
 
 # # # # # # # # # # # # # #
 # # Cleanup
-del myCpxArray, tmpArray, tmpCpxArrayOvlLeft, tmpCpxArrayOvlRight 
+del tmpArray, tmpCpxArrayOvlLeft, tmpCpxArrayOvlRight
+if not(split_overlap):
+    del myCpxArray
 
 # # # # # # # # # # # # # #
 # # Matrix containing pixel coordinates

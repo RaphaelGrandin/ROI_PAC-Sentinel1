@@ -9,7 +9,7 @@
 ### Dense ampcor calculation
 ####################################################
 
-
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #

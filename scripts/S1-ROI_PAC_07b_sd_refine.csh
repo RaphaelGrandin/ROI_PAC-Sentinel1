@@ -12,6 +12,7 @@
 ### following method from : Grandin et al. 2016, GRL
 ####################################################
 
+date
 
 # # # # # # # # # # # # # # # # # # #
 # # Interpret the parameter file  # #
@@ -233,6 +234,9 @@ while ( $count_strip <= $num_strips )
 	# # # # # # # # # # # #
 	# # # Re-read metadata
         # # # # # # # # # # # #
+
+	cp -f ${LABEL_ante}_${strip}_${polar}.slc.rsc ${LABEL_ante}_${strip}_${polar}_ORIG.slc.rsc
+	cp -f ${LABEL_post}_${strip}_${polar}.slc.rsc ${LABEL_post}_${strip}_${polar}_ORIG.slc.rsc
 
 	# # Master image  # #
 	
@@ -566,7 +570,7 @@ while ( $count_strip <= $num_strips )
                 @ scene += 1
         end
 
-        cp -f ${LABEL_post}_${strip}_${polar}.slc.rsc ${LABEL_post}_${strip}_${polar}_fw.slc.rsc
+        cp -f ${LABEL_post}_${strip}_${polar}_ORIG.slc.rsc ${LABEL_post}_${strip}_${polar}_fw.slc.rsc
 
 
 	# Backward image, post
@@ -616,7 +620,7 @@ while ( $count_strip <= $num_strips )
                 @ scene += 1
         end
 
-        cp -f ${LABEL_post}_${strip}_${polar}.slc.rsc ${LABEL_post}_${strip}_${polar}_bw.slc.rsc
+        cp -f ${LABEL_post}_${strip}_${polar}_ORIG.slc.rsc ${LABEL_post}_${strip}_${polar}_bw.slc.rsc
 
 
 
